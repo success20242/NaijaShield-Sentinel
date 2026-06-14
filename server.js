@@ -50,7 +50,56 @@ app.get('/reports', (req, res) => {
 
 
 // ===============================
-// 📌 DAILY REPORT ENGINE (IMPROVED)
+// 🧠 AUTO INTELLIGENCE SIMULATOR (NEW)
+// ===============================
+function randomZone() {
+    const zones = [
+        { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
+        { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
+        { name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
+    ];
+
+    return zones[Math.floor(Math.random() * zones.length)];
+}
+
+function generateIncident() {
+    const incidents = load(INCIDENT_FILE);
+
+    const zone = randomZone();
+
+    const types = ["keyword", "news", "user"];
+    const type = types[Math.floor(Math.random() * types.length)];
+
+    const messages = [
+        "Suspicious movement detected",
+        "Kidnap risk signal emerging",
+        "Gunmen activity reported",
+        "Security anomaly flagged",
+        "Community distress signal detected"
+    ];
+
+    const incident = {
+        id: Date.now(),
+        location: zone.name,
+        lat: zone.lat + (Math.random() * 0.1),
+        lng: zone.lng + (Math.random() * 0.1),
+        description: messages[Math.floor(Math.random() * messages.length)],
+        type,
+        time: new Date()
+    };
+
+    incidents.push(incident);
+    save(INCIDENT_FILE, incidents);
+
+    console.log("🧠 AI SIMULATION:", incident.description);
+}
+
+// run every 15 seconds
+setInterval(generateIncident, 15000);
+
+
+// ===============================
+// 📌 DAILY REPORT ENGINE
 // ===============================
 function generateReport() {
     const incidents = load(INCIDENT_FILE);
