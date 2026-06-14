@@ -1,11 +1,138 @@
-let lat = null;
-let lng = null;
+let map = L.map('map').setView([9.0820, 8.6753], 6); // Nigeria center
+
+// ===============================
+// 🗺️ BASE MAP
+// ===============================
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+
+// ===============================
+// 📍 USER LOCATION
+// ===============================
+let userLat = null;
+let userLng = null;
 
 navigator.geolocation.getCurrentPosition(pos => {
-    lat = pos.coords.latitude;
-    lng = pos.coords.longitude;
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
 });
 
+
+// ===============================
+// 📌 MAP STATE
+// ===============================
+let markers = [];
+let heatData = [];
+let heatLayer;
+
+
+// ===============================
+// 📡 LOAD INCIDENTS + MAP UPDATE
+// ===============================
+async function loadIncidents() {
+    const res = await fetch('/incidents');
+    const data = await res.json();
+
+    // Clear old markers
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    heatData = [];
+
+    const list = document.getElementById('list');
+    if (list) list.innerHTML = "";
+
+    data.forEach(i => {
+        if (!i.lat || !i.lng) return;
+
+        // =========================
+        // 📍 MARKER
+        // =========================
+        const marker = L.marker([i.lat, i.lng])
+            .addTo(map)
+            .bindPopup(`
+                <b>${(i.type || "incident").toUpperCase()}</b><br/>
+                ${i.description}
+            `);
+
+        markers.push(marker);
+
+        // =========================
+        // 🔥 HEAT INTENSITY
+        // =========================
+        let intensity = 0.5;
+
+        if (i.type === "keyword") intensity = 0.8;
+        else if (i.type === "news") intensity = 0.6;
+        else if (i.type === "user") intensity = 1.0;
+
+        heatData.push([i.lat, i.lng, intensity]);
+
+        // =========================
+        // 📄 LIST VIEW
+        // =========================
+        if (list) {
+            const li = document.createElement('li');
+            li.innerText = `${i.location} - ${i.description}`;
+            list.appendChild(li);
+        }
+    });
+
+    drawHeat();
+}
+
+
+// ===============================
+// 🔥 HEAT MAP LAYER
+// ===============================
+function drawHeat() {
+    if (heatLayer) {
+        map.removeLayer(heatLayer);
+    }
+
+    heatLayer = L.layerGroup();
+
+    heatData.forEach(point => {
+        const [lat, lng, intensity] = point;
+
+        L.circle([lat, lng], {
+            radius: 2000 * intensity,
+            color: intensity > 0.8 ? "red" : "orange",
+            fillColor: intensity > 0.8 ? "red" : "orange",
+            fillOpacity: 0.3
+        }).addTo(heatLayer);
+    });
+
+    heatLayer.addTo(map);
+}
+
+
+// ===============================
+// ⚠️ RISK ENGINE DISPLAY
+// ===============================
+async function loadRisk() {
+    const res = await fetch('/incidents');
+    const data = await res.json();
+
+    const lastHour = data.filter(i =>
+        Date.now() - new Date(i.time) < 3600000
+    );
+
+    let risk = "LOW";
+    if (lastHour.length >= 5) risk = "HIGH";
+    else if (lastHour.length >= 2) risk = "MEDIUM";
+
+    const riskEl = document.getElementById("riskLevel");
+    if (riskEl) {
+        riskEl.innerText = "Current Risk Level: " + risk;
+    }
+}
+
+
+// ===============================
+// 📤 REPORT INCIDENT
+// ===============================
 async function report() {
     const location = document.getElementById('location').value;
     const description = document.getElementById('desc').value;
@@ -13,21 +140,46 @@ async function report() {
     await fetch('/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location, description, lat, lng })
+        body: JSON.stringify({
+            location,
+            description,
+            lat: userLat,
+            lng: userLng
+        })
     });
 
-    load();
+    refresh();
 }
 
-async function load() {
-    const incidents = await fetch('/incidents').then(r => r.json());
-    const reports = await fetch('/reports').then(r => r.json());
 
-    document.getElementById('incidents').innerHTML =
-        incidents.map(i => `<li>${i.description}</li>`).join('');
+// ===============================
+// 📰 LOAD REPORTS
+// ===============================
+async function loadReports() {
+    const res = await fetch('/reports');
+    const data = await res.json();
 
-    document.getElementById('reports').innerHTML =
-        reports.map(r => `<li>${r.summary}</li>`).join('');
+    const reportsList = document.getElementById('reports');
+    if (!reportsList) return;
+
+    reportsList.innerHTML = data
+        .map(r => `<li>${r.summary}</li>`)
+        .join('');
 }
 
-load();
+
+// ===============================
+// 🔄 MASTER REFRESH ENGINE
+// ===============================
+function refresh() {
+    loadIncidents();
+    loadRisk();
+    loadReports();
+}
+
+
+// ===============================
+// 🚀 START SYSTEM
+// ===============================
+refresh();
+setInterval(refresh, 10000);
