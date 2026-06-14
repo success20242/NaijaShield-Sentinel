@@ -3,6 +3,7 @@ const cors = require('cors');
 
 const { load, save } = require('./utils');
 const { runSentinel } = require('./engine/sentinel');
+const { fetchNews } = require('./news'); // ✅ NEWS ENGINE ADDED
 
 const app = express();
 
@@ -50,7 +51,7 @@ app.get('/reports', (req, res) => {
 
 
 // ===============================
-// 🧠 AUTO INTELLIGENCE SIMULATOR (NEW)
+// 🧠 AUTO INTELLIGENCE SIMULATOR
 // ===============================
 function randomZone() {
     const zones = [
@@ -146,7 +147,7 @@ Continuous monitoring active across all regions.
 
 
 // ===============================
-// 📌 SENTINEL LOOP (BRAIN ENGINE)
+// 📌 SENTINEL LOOP (AI ENGINE)
 // ===============================
 setInterval(async () => {
     console.log("🧠 Sentinel scanning...");
@@ -163,7 +164,18 @@ setInterval(async () => {
 
 
 // ===============================
-// 📌 START SERVER
+// 📰 NEWS INTELLIGENCE LOOP (NEW)
+// ===============================
+setInterval(async () => {
+    console.log("📰 Fetching intelligence news...");
+
+    await fetchNews();
+
+}, 20000); // 20 seconds
+
+
+// ===============================
+// 🚀 START SERVER
 // ===============================
 app.listen(3000, () => {
     console.log("🚀 NaijaShield Sentinel running on port 3000");
