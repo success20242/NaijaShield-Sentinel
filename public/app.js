@@ -61,11 +61,10 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 
 // ===============================
-// 🚨 BANNER ALERT SYSTEM (NEW)
+// 🚨 BANNER ALERT
 // ===============================
 function showAlertBanner(message) {
     const banner = document.getElementById("alertBanner");
-
     if (!banner) return;
 
     banner.innerText = message;
@@ -78,7 +77,7 @@ function showAlertBanner(message) {
 
 
 // ===============================
-// 🔊 VOICE ALERT SYSTEM (NEW)
+// 🔊 VOICE ALERT
 // ===============================
 function speakAlert(text) {
     const msg = new SpeechSynthesisUtterance();
@@ -92,7 +91,36 @@ function speakAlert(text) {
 
 
 // ===============================
-// ⚠️ GEOFENCE CHECK (UPDATED)
+// 🧠 AI PREDICTION ENGINE
+// ===============================
+function predictDangerLevel(data) {
+    const now = Date.now();
+
+    const recent = data.filter(i =>
+        now - new Date(i.time) < 2 * 3600000
+    );
+
+    let score = 0;
+
+    recent.forEach(i => {
+        if (i.type === "user") score += 3;
+        else if (i.type === "news") score += 2;
+        else if (i.type === "keyword") score += 1;
+    });
+
+    if (recent.length > 10) score += 5;
+    if (recent.length > 20) score += 10;
+
+    if (score >= 15) return "CRITICAL";
+    if (score >= 8) return "HIGH";
+    if (score >= 4) return "MEDIUM";
+
+    return "LOW";
+}
+
+
+// ===============================
+// ⚠️ GEOFENCE CHECK
 // ===============================
 function checkGeofence(userLat, userLng) {
     if (!userLat || !userLng) return;
@@ -101,13 +129,9 @@ function checkGeofence(userLat, userLng) {
         const distance = getDistance(userLat, userLng, zone.lat, zone.lng);
 
         if (distance < zone.radius) {
-
             const message = `Warning. You are entering a high risk area: ${zone.name}`;
 
-            // 🚨 visual banner
             showAlertBanner(`⚠️ HIGH RISK ZONE: ${zone.name}`);
-
-            // 🔊 voice alert
             speakAlert(message);
         }
     });
@@ -149,7 +173,6 @@ async function loadIncidents() {
         markers.push(marker);
 
         let intensity = 0.5;
-
         if (i.type === "keyword") intensity = 0.8;
         else if (i.type === "news") intensity = 0.6;
         else if (i.type === "user") intensity = 1.0;
@@ -191,7 +214,7 @@ function drawHeat() {
 
 
 // ===============================
-// ⚠️ RISK ENGINE
+// ⚠️ RISK + AI DISPLAY
 // ===============================
 async function loadRisk() {
     const res = await fetch('/incidents');
@@ -205,9 +228,15 @@ async function loadRisk() {
     if (lastHour.length >= 5) risk = "HIGH";
     else if (lastHour.length >= 2) risk = "MEDIUM";
 
+    const prediction = predictDangerLevel(data);
+
     const riskEl = document.getElementById("riskLevel");
+
     if (riskEl) {
-        riskEl.innerText = "Current Risk Level: " + risk;
+        riskEl.innerHTML = `
+            Current Risk Level: <b>${risk}</b><br/>
+            🧠 AI Prediction: <b>${prediction}</b>
+        `;
     }
 }
 
@@ -251,6 +280,23 @@ async function loadReports() {
 
 
 // ===============================
+// 🚨 PREDICTIVE ALERT SYSTEM
+// ===============================
+function runAIAlertSystem() {
+    fetch('/incidents')
+        .then(r => r.json())
+        .then(data => {
+            const prediction = predictDangerLevel(data);
+
+            if (prediction === "CRITICAL") {
+                showAlertBanner("🧠 AI WARNING: Danger escalating rapidly in nearby zones");
+                speakAlert("Warning. Artificial intelligence predicts critical danger escalation in nearby areas.");
+            }
+        });
+}
+
+
+// ===============================
 // 🔄 REFRESH ENGINE
 // ===============================
 function refresh() {
@@ -259,6 +305,7 @@ function refresh() {
     loadReports();
 
     checkGeofence(userLat, userLng);
+    runAIAlertSystem();
 }
 
 
