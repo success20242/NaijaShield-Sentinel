@@ -2,37 +2,44 @@ const Parser = require('rss-parser');
 const { load, save } = require('./utils');
 
 const parser = new Parser();
+
 const INCIDENT_FILE = 'incidents.json';
 
 // ===============================
 // 🌐 RSS FEEDS (FREE SOURCES)
 // ===============================
 const feeds = [
-    // BBC global news
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-
-    // Google News focused on Nigeria security
     "https://news.google.com/rss/search?q=nigeria+kidnap+attack&hl=en-US&gl=US&ceid=US:en"
 ];
 
 
 // ===============================
-// 🧠 KEYWORD DETECTION RULES
+// 🧠 KEYWORD INTELLIGENCE ENGINE
 // ===============================
-const KEYWORDS = [
-    "kidnap",
-    "kidnapped",
-    "attack",
-    "gunmen",
-    "abduct",
-    "terror",
-    "bandits",
-    "school attack"
-];
+function isRisky(text) {
+    const keywords = [
+        "kidnap",
+        "kidnapped",
+        "kidnapping",
+        "attack",
+        "gunmen",
+        "abduct",
+        "abduction",
+        "terror",
+        "terrorist",
+        "bandits",
+        "violence",
+        "shooting",
+        "school attack"
+    ];
+
+    return keywords.some(k => text.includes(k));
+}
 
 
 // ===============================
-// 📡 NEWS INGESTION ENGINE
+// 📰 FETCH NEWS SIGNALS
 // ===============================
 async function fetchNews() {
     const incidents = load(INCIDENT_FILE);
@@ -43,19 +50,17 @@ async function fetchNews() {
         try {
             const feed = await parser.parseURL(url);
 
-            feed.items.slice(0, 5).forEach(item => {
-                const text = item.title.toLowerCase();
+            feed.items.slice(0, 8).forEach(item => {
+                const text = (
+                    item.title + " " + (item.contentSnippet || item.content || "")
+                ).toLowerCase();
 
-                const isThreat = KEYWORDS.some(keyword =>
-                    text.includes(keyword)
-                );
-
-                if (isThreat) {
+                if (isRisky(text)) {
                     incidents.push({
                         id: Date.now() + Math.random(),
-                        location: "News Feed",
-                        lat: 0,
-                        lng: 0,
+                        location: "News Intelligence",
+                        lat: 9.0820,
+                        lng: 8.6753, // center Nigeria fallback
                         description: item.title,
                         type: "news",
                         source: url.includes("bbc") ? "BBC" : "Google News",
@@ -63,11 +68,12 @@ async function fetchNews() {
                     });
 
                     newSignals++;
+                    console.log("📰 NEWS SIGNAL:", item.title);
                 }
             });
 
         } catch (err) {
-            console.log("🛑 RSS Error:", err.message);
+            console.log("RSS ERROR:", err.message);
         }
     }
 
