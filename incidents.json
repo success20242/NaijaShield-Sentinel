@@ -1,1 +1,83 @@
-[]
+[
+  {
+    "id": 1781465720701.8066,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "gunshots heard in ibadan",
+    "type": "keyword",
+    "time": "2026-06-14T19:35:20.701Z"
+  },
+  {
+    "id": 1781465720701.8074,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "kidnap attempt on lagos expressway",
+    "type": "keyword",
+    "time": "2026-06-14T19:35:20.701Z"
+  },
+  {
+    "id": 1781465720701.2292,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "armed men spotted near school in oyo",
+    "type": "keyword",
+    "time": "2026-06-14T19:35:20.701Z"
+  },
+  {
+    "id": 1781466321349.634,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "gunshots heard in ibadan",
+    "type": "keyword",
+    "time": "2026-06-14T19:45:21.349Z"
+  },
+  {
+    "id": 1781466321349.9182,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "kidnap attempt on lagos expressway",
+    "type": "keyword",
+    "time": "2026-06-14T19:45:21.349Z"
+  },
+  {
+    "id": 1781466321349.9202,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "armed men spotted near school in oyo",
+    "type": "keyword",
+    "time": "2026-06-14T19:45:21.349Z"
+  },
+  {
+    "id": 1781466922425.764,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "gunshots heard in ibadan",
+    "type": "keyword",
+    "time": "2026-06-14T19:55:22.425Z"
+  },
+  {
+    "id": 1781466922425.7134,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "kidnap attempt on lagos expressway",
+    "type": "keyword",
+    "time": "2026-06-14T19:55:22.425Z"
+  },
+  {
+    "id": 1781466922425.1978,
+    "location": "Keyword Signal",
+    "lat": 0,
+    "lng": 0,
+    "description": "armed men spotted near school in oyo",
+    "type": "keyword",
+    "time": "2026-06-14T19:55:22.425Z"
+  }
+]
