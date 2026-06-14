@@ -1,4 +1,24 @@
+
 let map = L.map('map').setView([9.0820, 8.6753], 6); // Nigeria center
+
+// ===============================
+// 🧭 GEOFENCE ZONES (NEW)
+// ===============================
+const dangerZones = [
+    {
+        name: "Oyo Hotspot",
+        lat: 7.3775,
+        lng: 3.9470,
+        radius: 50000 // meters
+    },
+    {
+        name: "Lagos Risk Corridor",
+        lat: 6.5244,
+        lng: 3.3792,
+        radius: 70000
+    }
+];
+
 
 // ===============================
 // 🗺️ BASE MAP
@@ -21,6 +41,47 @@ navigator.geolocation.getCurrentPosition(pos => {
 
 
 // ===============================
+// 📏 DISTANCE CALCULATOR (NEW)
+// ===============================
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // meters
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+}
+
+
+// ===============================
+// ⚠️ GEOFENCE CHECK (NEW)
+// ===============================
+function checkGeofence(userLat, userLng) {
+    if (!userLat || !userLng) return;
+
+    dangerZones.forEach(zone => {
+        const distance = getDistance(
+            userLat,
+            userLng,
+            zone.lat,
+            zone.lng
+        );
+
+        if (distance < zone.radius) {
+            alert(`⚠️ WARNING: You are entering a HIGH RISK AREA: ${zone.name}`);
+        }
+    });
+}
+
+
+// ===============================
 // 📌 MAP STATE
 // ===============================
 let markers = [];
@@ -35,7 +96,6 @@ async function loadIncidents() {
     const res = await fetch('/incidents');
     const data = await res.json();
 
-    // Clear old markers
     markers.forEach(m => map.removeLayer(m));
     markers = [];
     heatData = [];
@@ -46,9 +106,6 @@ async function loadIncidents() {
     data.forEach(i => {
         if (!i.lat || !i.lng) return;
 
-        // =========================
-        // 📍 MARKER
-        // =========================
         const marker = L.marker([i.lat, i.lng])
             .addTo(map)
             .bindPopup(`
@@ -58,9 +115,6 @@ async function loadIncidents() {
 
         markers.push(marker);
 
-        // =========================
-        // 🔥 HEAT INTENSITY
-        // =========================
         let intensity = 0.5;
 
         if (i.type === "keyword") intensity = 0.8;
@@ -69,9 +123,6 @@ async function loadIncidents() {
 
         heatData.push([i.lat, i.lng, intensity]);
 
-        // =========================
-        // 📄 LIST VIEW
-        // =========================
         if (list) {
             const li = document.createElement('li');
             li.innerText = `${i.location} - ${i.description}`;
@@ -175,6 +226,8 @@ function refresh() {
     loadIncidents();
     loadRisk();
     loadReports();
+
+    checkGeofence(userLat, userLng);
 }
 
 
