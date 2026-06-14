@@ -2,14 +2,14 @@
 let map = L.map('map').setView([9.0820, 8.6753], 6); // Nigeria center
 
 // ===============================
-// 🧭 GEOFENCE ZONES (NEW)
+// 🧭 GEOFENCE ZONES
 // ===============================
 const dangerZones = [
     {
         name: "Oyo Hotspot",
         lat: 7.3775,
         lng: 3.9470,
-        radius: 50000 // meters
+        radius: 50000
     },
     {
         name: "Lagos Risk Corridor",
@@ -41,10 +41,10 @@ navigator.geolocation.getCurrentPosition(pos => {
 
 
 // ===============================
-// 📏 DISTANCE CALCULATOR (NEW)
+// 📏 DISTANCE CALCULATOR
 // ===============================
 function getDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // meters
+    const R = 6371e3;
     const φ1 = lat1 * Math.PI/180;
     const φ2 = lat2 * Math.PI/180;
     const Δφ = (lat2-lat1) * Math.PI/180;
@@ -61,21 +61,54 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 
 // ===============================
-// ⚠️ GEOFENCE CHECK (NEW)
+// 🚨 BANNER ALERT SYSTEM (NEW)
+// ===============================
+function showAlertBanner(message) {
+    const banner = document.getElementById("alertBanner");
+
+    if (!banner) return;
+
+    banner.innerText = message;
+    banner.style.display = "block";
+
+    setTimeout(() => {
+        banner.style.display = "none";
+    }, 5000);
+}
+
+
+// ===============================
+// 🔊 VOICE ALERT SYSTEM (NEW)
+// ===============================
+function speakAlert(text) {
+    const msg = new SpeechSynthesisUtterance();
+    msg.text = text;
+    msg.volume = 1;
+    msg.rate = 1;
+    msg.pitch = 1;
+
+    window.speechSynthesis.speak(msg);
+}
+
+
+// ===============================
+// ⚠️ GEOFENCE CHECK (UPDATED)
 // ===============================
 function checkGeofence(userLat, userLng) {
     if (!userLat || !userLng) return;
 
     dangerZones.forEach(zone => {
-        const distance = getDistance(
-            userLat,
-            userLng,
-            zone.lat,
-            zone.lng
-        );
+        const distance = getDistance(userLat, userLng, zone.lat, zone.lng);
 
         if (distance < zone.radius) {
-            alert(`⚠️ WARNING: You are entering a HIGH RISK AREA: ${zone.name}`);
+
+            const message = `Warning. You are entering a high risk area: ${zone.name}`;
+
+            // 🚨 visual banner
+            showAlertBanner(`⚠️ HIGH RISK ZONE: ${zone.name}`);
+
+            // 🔊 voice alert
+            speakAlert(message);
         }
     });
 }
@@ -90,7 +123,7 @@ let heatLayer;
 
 
 // ===============================
-// 📡 LOAD INCIDENTS + MAP UPDATE
+// 📡 LOAD INCIDENTS
 // ===============================
 async function loadIncidents() {
     const res = await fetch('/incidents');
@@ -135,12 +168,10 @@ async function loadIncidents() {
 
 
 // ===============================
-// 🔥 HEAT MAP LAYER
+// 🔥 HEAT MAP
 // ===============================
 function drawHeat() {
-    if (heatLayer) {
-        map.removeLayer(heatLayer);
-    }
+    if (heatLayer) map.removeLayer(heatLayer);
 
     heatLayer = L.layerGroup();
 
@@ -160,7 +191,7 @@ function drawHeat() {
 
 
 // ===============================
-// ⚠️ RISK ENGINE DISPLAY
+// ⚠️ RISK ENGINE
 // ===============================
 async function loadRisk() {
     const res = await fetch('/incidents');
@@ -204,7 +235,7 @@ async function report() {
 
 
 // ===============================
-// 📰 LOAD REPORTS
+// 📰 REPORTS
 // ===============================
 async function loadReports() {
     const res = await fetch('/reports');
@@ -220,7 +251,7 @@ async function loadReports() {
 
 
 // ===============================
-// 🔄 MASTER REFRESH ENGINE
+// 🔄 REFRESH ENGINE
 // ===============================
 function refresh() {
     loadIncidents();
