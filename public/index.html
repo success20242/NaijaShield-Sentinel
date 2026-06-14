@@ -1,24 +1,111 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>NaijaShield AI</title>
-    <link rel="stylesheet" href="style.css">
+    <title>NaijaShield Sentinel AI</title>
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: #0b0f19;
+            color: white;
+        }
+
+        header {
+            padding: 15px;
+            background: #111827;
+        }
+
+        #map {
+            height: 60vh;
+            width: 100%;
+        }
+
+        .container {
+            padding: 15px;
+        }
+
+        input, textarea {
+            width: 300px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background: yellow;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .risk {
+            font-weight: bold;
+            color: orange;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+    </style>
 </head>
+
 <body>
 
-<h1>🛡️ NaijaShield AI</h1>
+<header>
+    <h2>🛡️ NaijaShield Sentinel Command Center</h2>
+    <p class="risk" id="riskLevel">Loading risk...</p>
+</header>
 
-<h2>Report Incident</h2>
-<input id="location" placeholder="Location"><br><br>
-<textarea id="desc"></textarea><br><br>
-<button onclick="report()">Submit</button>
+<!-- MAP -->
+<div id="map"></div>
 
-<h2>Incidents</h2>
-<ul id="incidents"></ul>
+<div class="container">
 
-<h2>Reports</h2>
-<ul id="reports"></ul>
+    <div class="grid">
 
+        <!-- REPORT FORM -->
+        <div>
+            <h3>📍 Report Incident</h3>
+
+            <input id="location" placeholder="Location"><br>
+            <textarea id="desc" placeholder="Describe incident"></textarea><br>
+
+            <button onclick="report()">Submit Report</button>
+        </div>
+
+        <!-- INCIDENTS -->
+        <div>
+            <h3>📡 Live Incidents</h3>
+            <ul id="incidents"></ul>
+        </div>
+
+    </div>
+
+    <!-- REPORTS -->
+    <h3>📰 Daily Reports</h3>
+    <ul id="reports"></ul>
+
+</div>
+
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="app.js"></script>
+
 </body>
 </html>
