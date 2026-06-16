@@ -3,7 +3,7 @@ const cors = require('cors');
 
 const { load, save } = require('./utils');
 
-// ✅ CORE ENGINE (NOW ACTIVE)
+// ✅ CORE ENGINE
 const {
     loadIncidents,
     getRiskLevel,
@@ -64,13 +64,40 @@ app.get('/reports', (req, res) => {
 
 
 /* ======================================
-   🧠 AI INCIDENT SIMULATOR (TEST MODE)
+   🧠 SAFE ZONE GENERATOR (FIXED)
+====================================== */
+function randomZone() {
+    const zones = [
+        { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
+        { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
+        { name: "Abuja Belt", lat: 9.0765, lng: 3.3986 }
+    ];
+
+    if (!zones || zones.length === 0) {
+        return {
+            name: "Unknown Zone",
+            lat: 0,
+            lng: 0
+        };
+    }
+
+    const index = Math.floor(Math.random() * zones.length);
+
+    return zones[index] || {
+        name: "Fallback Zone",
+        lat: 0,
+        lng: 0
+    };
+}
+
+
+/* ======================================
+   🧠 AI INCIDENT SIMULATOR (FIXED SAFETY)
 ====================================== */
 function generateIncident() {
     const incidents = load(INCIDENT_FILE);
 
-    const zones = generateZones();
-    const zone = zones[Math.floor(Math.random() * zones.length)];
+    const zone = randomZone(); // ✅ SAFE NOW
 
     const types = ["keyword", "news", "user"];
 
@@ -84,9 +111,9 @@ function generateIncident() {
 
     const incident = {
         id: Date.now(),
-        location: zone.name,
-        lat: zone.lat + (Math.random() * 0.05),
-        lng: zone.lng + (Math.random() * 0.05),
+        location: zone?.name || "Unknown Zone",
+        lat: (zone?.lat || 0) + (Math.random() * 0.05),
+        lng: (zone?.lng || 0) + (Math.random() * 0.05),
         description: messages[Math.floor(Math.random() * messages.length)],
         type: types[Math.floor(Math.random() * types.length)],
         time: new Date()
@@ -103,22 +130,22 @@ setInterval(generateIncident, 20000);
 
 
 /* ======================================
-   🧠 INTELLIGENCE CORE (REAL LOGIC)
+   🧠 INTELLIGENCE CORE
 ====================================== */
 function analyzeSystem() {
     const incidents = loadIncidents();
 
-    const zones = generateZones(incidents);
+    const zones = generateZones(incidents || []);
 
     const analysis = zones.map(zone => {
-        const risk = getRiskLevel(zone.incidents);
-        const confidence = calculateConfidence(zone.incidents);
+        const risk = getRiskLevel(zone?.incidents || []);
+        const confidence = calculateConfidence(zone?.incidents || []);
 
         return {
-            zone: zone.name,
+            zone: zone?.name || "Unknown Zone",
             risk,
             confidence,
-            incidentCount: zone.incidents.length
+            incidentCount: (zone?.incidents || []).length
         };
     });
 
@@ -127,7 +154,7 @@ function analyzeSystem() {
 
 
 /* ======================================
-   📊 DAILY REPORT ENGINE (UPGRADED)
+   📊 DAILY REPORT ENGINE
 ====================================== */
 function generateReport() {
     const incidents = loadIncidents();
@@ -147,9 +174,7 @@ function generateReport() {
         breakdown[i.type] = (breakdown[i.type] || 0) + 1;
     });
 
-    // ✅ AI ANALYSIS
     const zoneAnalysis = analyzeSystem();
-
     const highRiskZones = zoneAnalysis.filter(z => z.risk === "HIGH");
 
     const report = {
@@ -172,7 +197,7 @@ High Risk Zones:
 ${highRiskZones.map(z => `⚠️ ${z.zone} (${z.confidence}% confidence)`).join('\n') || "None"}
 
 System Insight:
-AI fusion engine actively correlating human, media, and behavioral signals.
+AI fusion engine actively correlating signals.
         `
     };
 
@@ -185,7 +210,7 @@ AI fusion engine actively correlating human, media, and behavioral signals.
 
 
 /* ======================================
-   🤖 SENTINEL LOOP (AI DECISION ENGINE)
+   🤖 SENTINEL LOOP
 ====================================== */
 setInterval(async () => {
     console.log("🧠 Sentinel scanning...");
@@ -198,18 +223,18 @@ setInterval(async () => {
 
     generateReport();
 
-}, 600000); // every 10 mins
+}, 600000);
 
 
 /* ======================================
-   📰 NEWS INTELLIGENCE LOOP
+   📰 NEWS LOOP
 ====================================== */
 setInterval(async () => {
     console.log("📰 Fetching intelligence...");
 
     await fetchNews();
 
-}, 30000); // 30 sec
+}, 30000);
 
 
 /* ======================================
