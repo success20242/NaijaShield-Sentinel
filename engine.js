@@ -1,50 +1,22 @@
-const fs = require('fs');
+// engine.js
+
+const { load } = require('../utils');
 
 const INCIDENT_FILE = 'incidents.json';
 
-// ---------- Load ----------
+/* ======================================
+   📥 LOAD INCIDENTS
+====================================== */
 function loadIncidents() {
-    if (!fs.existsSync(INCIDENT_FILE)) return [];
-    return JSON.parse(fs.readFileSync(INCIDENT_FILE));
+    return load(INCIDENT_FILE);
 }
 
-// ---------- 1. MULTI-SIGNAL RISK SCORING ----------
-function calculateRiskScore(incidents) {
-    let score = 0;
 
-    incidents.forEach(i => {
-        if (i.type === "report") score += 3;
-        else if (i.type === "keyword") score += 2;
-        else if (i.type === "news") score += 1;
-        else score += 1;
-    });
+/* ======================================
+   🌍 ZONE GENERATION (CLUSTERING)
+====================================== */
+function generateZones(incidents = []) {
 
-    return score;
-}
-
-// ---------- 2. TIME-BASED RISK ----------
-function getTimeFactor() {
-    const hour = new Date().getHours();
-
-    if (hour >= 20 || hour <= 5) return 3; // night risk
-    if (hour >= 6 && hour <= 9) return 2;  // morning commute
-    return 1;
-}
-
-// ---------- 3. FINAL RISK LEVEL ----------
-function getRiskLevel(incidents) {
-    const baseScore = calculateRiskScore(incidents);
-    const timeFactor = getTimeFactor();
-
-    const finalScore = baseScore * timeFactor;
-
-    if (finalScore >= 20) return "HIGH";
-    if (finalScore >= 10) return "MEDIUM";
-    return "LOW";
-}
-
-// ---------- 4. DYNAMIC GEOFENCE ----------
-function generateZones(incidents) {
     const zones = {};
 
     incidents.forEach(i => {
@@ -52,32 +24,111 @@ function generateZones(incidents) {
 
         if (!zones[key]) {
             zones[key] = {
-                location: key,
-                lat: i.lat || 0,
-                lng: i.lng || 0,
-                count: 0
+                name: key,
+                incidents: []
             };
         }
 
-        zones[key].count++;
+        zones[key].incidents.push(i);
     });
 
-    return Object.values(zones).map(z => ({
-        ...z,
-        radius: 0.01 + (z.count * 0.005), // expands with incidents
-        risk: z.count > 5 ? "HIGH" : z.count > 2 ? "MEDIUM" : "LOW"
-    }));
+    return Object.values(zones);
 }
 
-// ---------- 5. CONFIDENCE SCORE ----------
+
+/* ======================================
+   ⚠️ RISK LEVEL CALCULATION
+====================================== */
+function getRiskLevel(incidents) {
+
+    if (!incidents || incidents.length === 0) return "LOW";
+
+    let score = 0;
+
+    incidents.forEach(i => {
+
+        // 🔥 TYPE WEIGHT
+        if (i.type === "user") score += 3;
+        if (i.type === "keyword") score += 2;
+        if (i.type === "news") score += 1;
+
+        // ⏱️ TIME DECAY (recent = higher risk)
+        const minutesAgo = (Date.now() - new Date(i.time)) / 60000;
+
+        if (minutesAgo < 10) score += 3;
+        else if (minutesAgo < 60) score += 2;
+        else if (minutesAgo < 180) score += 1;
+
+        // 🚨 KEYWORD SEVERITY
+        const text = (i.description || "").toLowerCase();
+
+        if (text.includes("kidnap")) score += 5;
+        if (text.includes("gunmen")) score += 5;
+        if (text.includes("attack")) score += 4;
+        if (text.includes("shooting")) score += 4;
+        if (text.includes("suspicious")) score += 2;
+
+    });
+
+    // 📊 FINAL CLASSIFICATION
+    if (score >= 25) return "CRITICAL";
+    if (score >= 15) return "HIGH";
+    if (score >= 8) return "MEDIUM";
+
+    return "LOW";
+}
+
+
+/* ======================================
+   📊 CONFIDENCE SCORE (%)
+====================================== */
 function calculateConfidence(incidents) {
-    let types = new Set(incidents.map(i => i.type));
-    return types.size / 3; // normalized
+
+    if (!incidents.length) return 0;
+
+    let signalStrength = 0;
+
+    incidents.forEach(i => {
+        if (i.type === "user") signalStrength += 3;
+        if (i.type === "keyword") signalStrength += 2;
+        if (i.type === "news") signalStrength += 1;
+    });
+
+    const diversityBonus = new Set(incidents.map(i => i.type)).size * 5;
+
+    const confidence = Math.min(100,
+        (signalStrength * 5) + diversityBonus
+    );
+
+    return Math.round(confidence);
 }
 
+
+/* ======================================
+   🔮 FUTURE RISK PREDICTION (ADVANCED)
+====================================== */
+function predictNextIncident(incidents) {
+
+    if (!incidents.length) return "STABLE";
+
+    const recent = incidents.filter(i =>
+        (Date.now() - new Date(i.time)) < 3600000 // last 1hr
+    );
+
+    if (recent.length > 5) return "ESCALATING";
+    if (recent.length > 2) return "WARNING";
+
+    return "STABLE";
+}
+
+
+/* ======================================
+   📤 EXPORTS
+====================================== */
 module.exports = {
     loadIncidents,
-    getRiskLevel,
     generateZones,
-    calculateConfidence
+    getRiskLevel,
+    calculateConfidence,
+    predictNextIncident
 };
