@@ -1,6 +1,6 @@
 // engine.js
 
-const { load } = require('../utils');
+const { load } = require('./utils');
 
 const INCIDENT_FILE = 'incidents.json';
 
