@@ -2,9 +2,12 @@
 
 const Parser = require('rss-parser');
 const axios = require('axios');
+require('dotenv').config();
 
 const { load, save } = require('./utils');
 const { analyzeText, extractLocation } = require('./nlp');
+const { getCoordinates } = require('./geo');
+const { sendTelegramAlert } = require('./alerts');
 
 const parser = new Parser();
 
@@ -20,15 +23,50 @@ const feeds = [
 
 
 // ===============================
-// 🧠 DUPLICATE CHECK
+// 🧠 ADVANCED DUPLICATE FILTER
 // ===============================
 function isDuplicate(incidents, title) {
-    return incidents.some(i => i.description === title);
+    return incidents.some(i =>
+        i.description === title ||
+        i.description.includes(title.substring(0, 30))
+    );
 }
 
 
 // ===============================
-// 📰 RSS + NLP ENGINE
+// 🧠 BUILD INCIDENT OBJECT
+// ===============================
+async function buildIncident(rawText, title, source) {
+
+    const analysis = analyzeText(rawText);
+    if (analysis.score === 0) return null;
+
+    const locationName = extractLocation(rawText);
+
+    // 🌍 REAL GEO
+    const coords = await getCoordinates(locationName);
+
+    return {
+        id: Date.now() + Math.random(),
+        location: locationName,
+        lat: coords?.lat || 9.0820,
+        lng: coords?.lng || 8.6753,
+
+        description: title,
+        type: "news",
+        source,
+
+        risk: analysis.risk,
+        keywords: analysis.keywords,
+        score: analysis.score,
+
+        time: new Date()
+    };
+}
+
+
+// ===============================
+// 📰 RSS ENGINE
 // ===============================
 async function fetchRSS(incidents) {
 
@@ -38,36 +76,30 @@ async function fetchRSS(incidents) {
         try {
             const feed = await parser.parseURL(url);
 
-            feed.items.slice(0, 10).forEach(item => {
+            for (let item of feed.items.slice(0, 10)) {
 
-                if (isDuplicate(incidents, item.title)) return;
+                if (isDuplicate(incidents, item.title)) continue;
 
                 const rawText = item.title + " " + (item.contentSnippet || "");
 
-                const analysis = analyzeText(rawText);
-                if (analysis.score === 0) return;
+                const incident = await buildIncident(
+                    rawText,
+                    item.title,
+                    url.includes("bbc") ? "BBC" : "Google News"
+                );
 
-                const incident = {
-                    id: Date.now() + Math.random(),
-                    location: extractLocation(rawText),
-                    lat: 9.0820 + Math.random(),
-                    lng: 8.6753 + Math.random(),
-                    description: item.title,
-                    type: "news",
-                    source: url.includes("bbc") ? "BBC" : "Google News",
-
-                    risk: analysis.risk,
-                    keywords: analysis.keywords,
-                    score: analysis.score,
-
-                    time: new Date()
-                };
+                if (!incident) continue;
 
                 incidents.push(incident);
                 count++;
 
-                console.log("🧠 RSS SIGNAL:", incident.description);
-            });
+                console.log("🧠 RSS:", incident.description);
+
+                // 🚨 ESCALATION TRIGGER
+                if (incident.risk === "HIGH") {
+                    await sendTelegramAlert(incident);
+                }
+            }
 
         } catch (err) {
             console.log("RSS ERROR:", err.message);
@@ -79,58 +111,49 @@ async function fetchRSS(incidents) {
 
 
 // ===============================
-// 🌍 GDELT API ENGINE (REAL DATA)
+// 🌍 GDELT ENGINE
 // ===============================
 async function fetchGDELT(incidents) {
 
     let count = 0;
 
     try {
-        const url = "https://api.gdeltproject.org/api/v2/doc/doc";
-
-        const response = await axios.get(url, {
-            params: {
-                query: "kidnap OR attack OR gunmen OR abduction",
-                mode: "ArtList",
-                format: "json",
-                maxrecords: 20
+        const res = await axios.get(
+            "https://api.gdeltproject.org/api/v2/doc/doc",
+            {
+                params: {
+                    query: "kidnap OR attack OR gunmen OR abduction",
+                    mode: "ArtList",
+                    format: "json",
+                    maxrecords: 20
+                }
             }
-        });
+        );
 
-        const articles = response.data.articles || [];
+        for (let article of res.data.articles || []) {
 
-        articles.forEach(article => {
+            if (isDuplicate(incidents, article.title)) continue;
 
-            if (isDuplicate(incidents, article.title)) return;
+            const rawText = article.title;
 
-            const rawText = article.title + " " + (article.seendate || "");
+            const incident = await buildIncident(
+                rawText,
+                article.title,
+                "GDELT"
+            );
 
-            const analysis = analyzeText(rawText);
-            if (analysis.score === 0) return;
-
-            const incident = {
-                id: Date.now() + Math.random(),
-                location: extractLocation(rawText),
-                lat: 9.0820 + Math.random(),
-                lng: 8.6753 + Math.random(),
-                description: article.title,
-                type: "news",
-                source: "GDELT",
-
-                risk: analysis.risk,
-                keywords: analysis.keywords,
-                score: analysis.score,
-
-                url: article.url,
-
-                time: new Date()
-            };
+            if (!incident) continue;
 
             incidents.push(incident);
             count++;
 
-            console.log("🌍 GDELT SIGNAL:", article.title);
-        });
+            console.log("🌍 GDELT:", article.title);
+
+            // 🚨 ESCALATION
+            if (incident.risk === "HIGH") {
+                await sendTelegramAlert(incident);
+            }
+        }
 
     } catch (err) {
         console.log("GDELT ERROR:", err.message);
@@ -141,18 +164,18 @@ async function fetchGDELT(incidents) {
 
 
 // ===============================
-// 🧠 MASTER FETCH FUNCTION
+// 🧠 MASTER FUNCTION
 // ===============================
 async function fetchNews() {
 
     const incidents = load(INCIDENT_FILE);
 
-    const rssCount = await fetchRSS(incidents);
-    const gdeltCount = await fetchGDELT(incidents);
+    const rss = await fetchRSS(incidents);
+    const gdelt = await fetchGDELT(incidents);
 
     save(INCIDENT_FILE, incidents);
 
-    console.log(`📰 TOTAL SIGNALS → RSS: ${rssCount}, GDELT: ${gdeltCount}`);
+    console.log(`📰 TOTAL → RSS: ${rss}, GDELT: ${gdelt}`);
 }
 
 module.exports = { fetchNews };
