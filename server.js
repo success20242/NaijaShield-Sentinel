@@ -1,7 +1,27 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios'); // ✅ ADDED (Telegram alerts)
 
 const { load, save } = require('./utils');
+
+// 🔐 TELEGRAM CONFIG
+const TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
+const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE";
+
+// 📡 TELEGRAM ALERT FUNCTION
+async function sendTelegramAlert(message) {
+    try {
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: "HTML"
+        });
+
+        console.log("📲 Telegram alert sent");
+    } catch (err) {
+        console.log("❌ Telegram error:", err.message);
+    }
+}
 
 // ✅ CORE ENGINE
 const {
@@ -74,20 +94,12 @@ function randomZone() {
     ];
 
     if (!zones || zones.length === 0) {
-        return {
-            name: "Unknown Zone",
-            lat: 0,
-            lng: 0
-        };
+        return { name: "Unknown Zone", lat: 0, lng: 0 };
     }
 
     const index = Math.floor(Math.random() * zones.length);
 
-    return zones[index] || {
-        name: "Fallback Zone",
-        lat: 0,
-        lng: 0
-    };
+    return zones[index] || { name: "Fallback Zone", lat: 0, lng: 0 };
 }
 
 
@@ -151,7 +163,7 @@ function analyzeSystem() {
 
 
 /* ======================================
-   📊 DAILY REPORT ENGINE (FIXED)
+   📊 DAILY REPORT ENGINE
 ====================================== */
 function generateReport() {
     const incidents = loadIncidents() || [];
@@ -198,7 +210,6 @@ AI fusion engine actively correlating signals.
         `
     };
 
-    // ✅ FIX: prevent duplicate daily reports
     let reports = load(REPORT_FILE) || [];
 
     if (!Array.isArray(reports)) {
@@ -208,7 +219,7 @@ AI fusion engine actively correlating signals.
     const existing = reports.find(r => r.date === today);
 
     if (existing) {
-        Object.assign(existing, report); // update same-day report
+        Object.assign(existing, report);
     } else {
         reports.push(report);
     }
@@ -229,6 +240,17 @@ setInterval(async () => {
 
     if (risk === "HIGH") {
         console.log("🚨 HIGH RISK DETECTED");
+
+        // 🚨 TELEGRAM ALERT TRIGGER
+        await sendTelegramAlert(`
+🚨 <b>HIGH RISK ALERT</b>
+
+NaijaShield Sentinel detected HIGH risk activity.
+
+Time: ${new Date().toLocaleString()}
+
+Check dashboard immediately.
+        `);
     }
 
     generateReport();
