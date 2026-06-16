@@ -31,7 +31,7 @@ const REPORT_FILE = 'reports.json';
    📌 REPORT INCIDENT (USER INPUT)
 ====================================== */
 app.post('/report', (req, res) => {
-    const incidents = load(INCIDENT_FILE);
+    const incidents = load(INCIDENT_FILE) || [];
 
     const newIncident = {
         id: Date.now(),
@@ -59,18 +59,18 @@ app.get('/incidents', (req, res) => {
    📌 GET REPORTS
 ====================================== */
 app.get('/reports', (req, res) => {
-    res.json(load(REPORT_FILE));
+    res.json(load(REPORT_FILE) || []);
 });
 
 
 /* ======================================
-   🧠 SAFE ZONE GENERATOR (FIXED)
+   🧠 SAFE ZONE GENERATOR
 ====================================== */
 function randomZone() {
     const zones = [
         { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
         { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
-        { name: "Abuja Belt", lat: 9.0765, lng: 3.3986 }
+        { name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
     ];
 
     if (!zones || zones.length === 0) {
@@ -92,12 +92,12 @@ function randomZone() {
 
 
 /* ======================================
-   🧠 AI INCIDENT SIMULATOR (FIXED SAFETY)
+   🧠 AI INCIDENT SIMULATOR
 ====================================== */
 function generateIncident() {
-    const incidents = load(INCIDENT_FILE);
+    const incidents = load(INCIDENT_FILE) || [];
 
-    const zone = randomZone(); // ✅ SAFE NOW
+    const zone = randomZone();
 
     const types = ["keyword", "news", "user"];
 
@@ -133,31 +133,28 @@ setInterval(generateIncident, 20000);
    🧠 INTELLIGENCE CORE
 ====================================== */
 function analyzeSystem() {
-    const incidents = loadIncidents();
+    const incidents = loadIncidents() || [];
 
-    const zones = generateZones(incidents || []);
+    const zones = generateZones(incidents);
 
-    const analysis = zones.map(zone => {
-        const risk = getRiskLevel(zone?.incidents || []);
-        const confidence = calculateConfidence(zone?.incidents || []);
+    return zones.map(zone => {
+        const safeIncidents = zone?.incidents || [];
 
         return {
             zone: zone?.name || "Unknown Zone",
-            risk,
-            confidence,
-            incidentCount: (zone?.incidents || []).length
+            risk: getRiskLevel(safeIncidents),
+            confidence: calculateConfidence(safeIncidents),
+            incidentCount: safeIncidents.length
         };
     });
-
-    return analysis;
 }
 
 
 /* ======================================
-   📊 DAILY REPORT ENGINE
+   📊 DAILY REPORT ENGINE (FIXED)
 ====================================== */
 function generateReport() {
-    const incidents = loadIncidents();
+    const incidents = loadIncidents() || [];
     const today = new Date().toDateString();
 
     const todayData = incidents.filter(i =>
@@ -201,8 +198,21 @@ AI fusion engine actively correlating signals.
         `
     };
 
-    const reports = load(REPORT_FILE);
-    reports.push(report);
+    // ✅ FIX: prevent duplicate daily reports
+    let reports = load(REPORT_FILE) || [];
+
+    if (!Array.isArray(reports)) {
+        reports = [];
+    }
+
+    const existing = reports.find(r => r.date === today);
+
+    if (existing) {
+        Object.assign(existing, report); // update same-day report
+    } else {
+        reports.push(report);
+    }
+
     save(REPORT_FILE, reports);
 
     console.log("📰 REPORT GENERATED");
