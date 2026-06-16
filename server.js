@@ -2,8 +2,20 @@ const express = require('express');
 const cors = require('cors');
 
 const { load, save } = require('./utils');
+
+// ✅ CORE ENGINE (NOW ACTIVE)
+const {
+    loadIncidents,
+    getRiskLevel,
+    generateZones,
+    calculateConfidence
+} = require('./engine');
+
+// ✅ SENTINEL AI
 const { runSentinel } = require('./engine/sentinel');
-const { fetchNews } = require('./news'); // ✅ NEWS ENGINE ADDED
+
+// ✅ NEWS + KEYWORD SIGNALS
+const { fetchNews } = require('./news');
 
 const app = express();
 
@@ -15,61 +27,52 @@ const INCIDENT_FILE = 'incidents.json';
 const REPORT_FILE = 'reports.json';
 
 
-// ===============================
-// 📌 REPORT INCIDENT (USER INPUT)
-// ===============================
+/* ======================================
+   📌 REPORT INCIDENT (USER INPUT)
+====================================== */
 app.post('/report', (req, res) => {
     const incidents = load(INCIDENT_FILE);
 
-    incidents.push({
+    const newIncident = {
         id: Date.now(),
         ...req.body,
         type: "user",
         time: new Date()
-    });
+    };
 
+    incidents.push(newIncident);
     save(INCIDENT_FILE, incidents);
 
-    res.json({ message: "Incident recorded" });
+    res.json({ message: "Incident recorded", data: newIncident });
 });
 
 
-// ===============================
-// 📌 GET INCIDENTS
-// ===============================
+/* ======================================
+   📌 GET INCIDENTS
+====================================== */
 app.get('/incidents', (req, res) => {
-    res.json(load(INCIDENT_FILE));
+    res.json(loadIncidents());
 });
 
 
-// ===============================
-// 📌 GET REPORTS
-// ===============================
+/* ======================================
+   📌 GET REPORTS
+====================================== */
 app.get('/reports', (req, res) => {
     res.json(load(REPORT_FILE));
 });
 
 
-// ===============================
-// 🧠 AUTO INTELLIGENCE SIMULATOR
-// ===============================
-function randomZone() {
-    const zones = [
-        { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
-        { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
-        { name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
-    ];
-
-    return zones[Math.floor(Math.random() * zones.length)];
-}
-
+/* ======================================
+   🧠 AI INCIDENT SIMULATOR (TEST MODE)
+====================================== */
 function generateIncident() {
     const incidents = load(INCIDENT_FILE);
 
-    const zone = randomZone();
+    const zones = generateZones();
+    const zone = zones[Math.floor(Math.random() * zones.length)];
 
     const types = ["keyword", "news", "user"];
-    const type = types[Math.floor(Math.random() * types.length)];
 
     const messages = [
         "Suspicious movement detected",
@@ -82,28 +85,52 @@ function generateIncident() {
     const incident = {
         id: Date.now(),
         location: zone.name,
-        lat: zone.lat + (Math.random() * 0.1),
-        lng: zone.lng + (Math.random() * 0.1),
+        lat: zone.lat + (Math.random() * 0.05),
+        lng: zone.lng + (Math.random() * 0.05),
         description: messages[Math.floor(Math.random() * messages.length)],
-        type,
+        type: types[Math.floor(Math.random() * types.length)],
         time: new Date()
     };
 
     incidents.push(incident);
     save(INCIDENT_FILE, incidents);
 
-    console.log("🧠 AI SIMULATION:", incident.description);
+    console.log("🧠 SIM:", incident.description);
 }
 
-// run every 15 seconds
-setInterval(generateIncident, 15000);
+// simulate every 20 sec
+setInterval(generateIncident, 20000);
 
 
-// ===============================
-// 📌 DAILY REPORT ENGINE
-// ===============================
+/* ======================================
+   🧠 INTELLIGENCE CORE (REAL LOGIC)
+====================================== */
+function analyzeSystem() {
+    const incidents = loadIncidents();
+
+    const zones = generateZones(incidents);
+
+    const analysis = zones.map(zone => {
+        const risk = getRiskLevel(zone.incidents);
+        const confidence = calculateConfidence(zone.incidents);
+
+        return {
+            zone: zone.name,
+            risk,
+            confidence,
+            incidentCount: zone.incidents.length
+        };
+    });
+
+    return analysis;
+}
+
+
+/* ======================================
+   📊 DAILY REPORT ENGINE (UPGRADED)
+====================================== */
 function generateReport() {
-    const incidents = load(INCIDENT_FILE);
+    const incidents = loadIncidents();
     const today = new Date().toDateString();
 
     const todayData = incidents.filter(i =>
@@ -120,21 +147,32 @@ function generateReport() {
         breakdown[i.type] = (breakdown[i.type] || 0) + 1;
     });
 
+    // ✅ AI ANALYSIS
+    const zoneAnalysis = analyzeSystem();
+
+    const highRiskZones = zoneAnalysis.filter(z => z.risk === "HIGH");
+
     const report = {
         date: today,
         total: todayData.length,
         breakdown,
+        zones: zoneAnalysis,
+        alerts: highRiskZones,
         summary: `
-📰 NAJIA SHIELD DAILY REPORT
+📰 NAIJA SHIELD INTELLIGENCE REPORT
 
-Total incidents today: ${todayData.length}
+Total Incidents: ${todayData.length}
 
-- Citizen reports: ${breakdown.user}
-- News signals: ${breakdown.news}
-- Keyword alerts: ${breakdown.keyword}
+Breakdown:
+- Citizen: ${breakdown.user}
+- News: ${breakdown.news}
+- Keywords: ${breakdown.keyword}
 
-System Status:
-Continuous monitoring active across all regions.
+High Risk Zones:
+${highRiskZones.map(z => `⚠️ ${z.zone} (${z.confidence}% confidence)`).join('\n') || "None"}
+
+System Insight:
+AI fusion engine actively correlating human, media, and behavioral signals.
         `
     };
 
@@ -142,13 +180,13 @@ Continuous monitoring active across all regions.
     reports.push(report);
     save(REPORT_FILE, reports);
 
-    console.log("📰 Daily report generated");
+    console.log("📰 REPORT GENERATED");
 }
 
 
-// ===============================
-// 📌 SENTINEL LOOP (AI ENGINE)
-// ===============================
+/* ======================================
+   🤖 SENTINEL LOOP (AI DECISION ENGINE)
+====================================== */
 setInterval(async () => {
     console.log("🧠 Sentinel scanning...");
 
@@ -160,23 +198,23 @@ setInterval(async () => {
 
     generateReport();
 
-}, 600000); // 10 minutes
+}, 600000); // every 10 mins
 
 
-// ===============================
-// 📰 NEWS INTELLIGENCE LOOP (NEW)
-// ===============================
+/* ======================================
+   📰 NEWS INTELLIGENCE LOOP
+====================================== */
 setInterval(async () => {
-    console.log("📰 Fetching intelligence news...");
+    console.log("📰 Fetching intelligence...");
 
     await fetchNews();
 
-}, 20000); // 20 seconds
+}, 30000); // 30 sec
 
 
-// ===============================
-// 🚀 START SERVER
-// ===============================
+/* ======================================
+   🚀 START SERVER
+====================================== */
 app.listen(3000, () => {
     console.log("🚀 NaijaShield Sentinel running on port 3000");
 });
