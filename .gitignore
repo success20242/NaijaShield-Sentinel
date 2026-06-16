@@ -1,0 +1,39 @@
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Environment variables
+# =========================
+.env
+
+# =========================
+# Data files (IMPORTANT)
+# =========================
+incidents.json
+reports.json
+dailyReports.json
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# OS / Editor files
+# =========================
+.DS_Store
+.vscode/
+.idea/
+
+# =========================
+# Build / cache
+# =========================
+dist/
+build/
+.cache/
