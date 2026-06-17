@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -6,6 +7,15 @@ const { Server } = require('socket.io');
 
 const { load, save } = require('./utils');
 
+// ======================================
+// 🧠 LOGGER (clean system utility)
+// ======================================
+const log = {
+    ok: (msg) => console.log(`[OK] ${msg}`),
+    warn: (msg) => console.log(`[WARN] ${msg}`),
+    error: (msg) => console.log(`[ERROR] ${msg}`),
+    info: (msg) => console.log(`[INFO] ${msg}`)
+};
 // ======================================
 // ⚙️ ALERT MEMORY
 // ======================================
@@ -358,5 +368,5 @@ setInterval(async () => {
 // 🚀 START SERVER (SOCKET ENABLED)
 // ======================================
 server.listen(3000, () => {
-    console.log("🚀 NaijaShield LIVE STREAM running on port 3000");
+    console.log("[OK] NaijaShield LIVE STREAM running on port 3000");
 });
