@@ -1,86 +1,85 @@
 <!DOCTYPE html>
+
 <html>
 <head>
     <title>NaijaShield Sentinel AI</title>
 
-    <!-- Leaflet -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+```
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial;
-            background: #0b0f19;
-            color: white;
-        }
+<style>
+    body {
+        margin: 0;
+        font-family: Arial;
+        background: #0b0f19;
+        color: white;
+    }
 
-        header {
-            padding: 15px;
-            background: #111827;
-        }
+    header {
+        padding: 15px;
+        background: #111827;
+    }
 
-        #map {
-            height: 60vh;
-            width: 100%;
-        }
+    #map {
+        height: 60vh;
+        width: 100%;
+    }
 
-        .container {
-            padding: 15px;
-        }
+    .container {
+        padding: 15px;
+    }
 
-        input, textarea {
-            width: 300px;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
+    input, textarea {
+        width: 300px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
 
-        button {
-            padding: 10px 15px;
-            background: yellow;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
+    button {
+        padding: 10px 15px;
+        background: yellow;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+    }
 
-        .risk {
-            font-weight: bold;
-            color: orange;
-        }
+    .risk {
+        font-weight: bold;
+    }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
+    .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
 
-        ul {
-            list-style: none;
-            padding: 0;
-        }
+    ul {
+        list-style: none;
+        padding: 0;
+    }
 
-        li {
-            padding: 5px 0;
-            border-bottom: 1px solid #333;
-        }
+    li {
+        padding: 5px 0;
+        border-bottom: 1px solid #333;
+    }
 
-        /* ===============================
-           🚨 ALERT BANNER (NEW)
-        =============================== */
-        #alertBanner {
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: red;
-            color: white;
-            padding: 12px 20px;
-            font-weight: bold;
-            border-radius: 8px;
-            display: none;
-            z-index: 9999;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-    </style>
+    #alertBanner {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: red;
+        color: white;
+        padding: 12px 20px;
+        font-weight: bold;
+        border-radius: 8px;
+        display: none;
+        z-index: 9999;
+    }
+</style>
+```
+
 </head>
 
 <body>
@@ -90,43 +89,164 @@
     <p class="risk" id="riskLevel">Loading risk...</p>
 </header>
 
-<!-- 🚨 ALERT BANNER -->
 <div id="alertBanner"></div>
 
-<!-- MAP -->
 <div id="map"></div>
 
 <div class="container">
 
-    <div class="grid">
+```
+<div class="grid">
 
-        <!-- REPORT FORM -->
-        <div>
-            <h3>📍 Report Incident</h3>
-
-            <input id="location" placeholder="Location"><br>
-            <textarea id="desc" placeholder="Describe incident"></textarea><br>
-
-            <button onclick="report()">Submit Report</button>
-        </div>
-
-        <!-- INCIDENTS -->
-        <div>
-            <h3>📡 Live Incidents</h3>
-            <ul id="incidents"></ul>
-        </div>
-
+    <div>
+        <h3>📍 Report Incident</h3>
+        <input id="location" placeholder="Location"><br>
+        <textarea id="desc" placeholder="Describe incident"></textarea><br>
+        <button onclick="report()">Submit Report</button>
     </div>
 
-    <!-- REPORTS -->
-    <h3>📰 Daily Reports</h3>
-    <ul id="reports"></ul>
+    <div>
+        <h3>📡 Live Incidents</h3>
+        <ul id="incidents"></ul>
+    </div>
 
 </div>
 
-<!-- Leaflet -->
+<h3>📰 Daily Reports</h3>
+<ul id="reports"></ul>
+```
+
+</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="app.js"></script>
+
+<script>
+let map;
+let markers = [];
+
+// 🗺 INIT MAP
+function initMap() {
+    map = L.map('map').setView([9.0820, 8.6753], 6); // Nigeria center
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+}
+
+// 📡 LOAD INCIDENTS
+async function loadIncidents() {
+    try {
+        const res = await fetch('/incidents');
+        const data = await res.json();
+
+        const list = document.getElementById('incidents');
+        list.innerHTML = "";
+
+        // clear markers
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+
+        data.slice(-10).reverse().forEach(i => {
+            const li = document.createElement('li');
+            li.textContent = `${i.location} - ${i.desc}`;
+            list.appendChild(li);
+
+            if (i.lat && i.lng) {
+                const marker = L.marker([i.lat, i.lng]).addTo(map);
+                marker.bindPopup(i.desc);
+                markers.push(marker);
+            }
+        });
+
+    } catch (err) {
+        console.log("Error loading incidents");
+    }
+}
+
+// 🧠 LOAD RISK
+async function loadRisk() {
+    try {
+        const res = await fetch('/risk');
+        const data = await res.json();
+
+        const el = document.getElementById('riskLevel');
+        el.textContent = "Risk Level: " + data.risk;
+
+        if (data.risk === "HIGH") {
+            el.style.color = "red";
+            showAlert("🚨 HIGH RISK AREA DETECTED");
+        } else if (data.risk === "MEDIUM") {
+            el.style.color = "orange";
+        } else {
+            el.style.color = "green";
+        }
+
+    } catch (err) {
+        console.log("Risk load error");
+    }
+}
+
+// 📰 LOAD REPORTS
+async function loadReports() {
+    try {
+        const res = await fetch('/reports');
+        const data = await res.json();
+
+        const list = document.getElementById('reports');
+        list.innerHTML = "";
+
+        data.slice(-5).reverse().forEach(r => {
+            const li = document.createElement('li');
+            li.textContent = r;
+            list.appendChild(li);
+        });
+
+    } catch (err) {}
+}
+
+// 🚨 ALERT BANNER
+function showAlert(msg) {
+    const banner = document.getElementById('alertBanner');
+    banner.textContent = msg;
+    banner.style.display = "block";
+
+    setTimeout(() => {
+        banner.style.display = "none";
+    }, 5000);
+}
+
+// 📍 REPORT INCIDENT
+async function report() {
+    const location = document.getElementById('location').value;
+    const desc = document.getElementById('desc').value;
+
+    if (!location || !desc) return alert("Fill all fields");
+
+    await fetch('/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location, desc })
+    });
+
+    document.getElementById('location').value = "";
+    document.getElementById('desc').value = "";
+
+    loadIncidents();
+}
+
+// 🔄 AUTO REFRESH
+setInterval(() => {
+    loadIncidents();
+    loadRisk();
+    loadReports();
+}, 10000);
+
+// 🚀 START
+initMap();
+loadIncidents();
+loadRisk();
+loadReports();
+</script>
 
 </body>
 </html>
