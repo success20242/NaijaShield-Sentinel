@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const { load, save } = require('./utils');
 
@@ -13,22 +15,19 @@ const lastAlerts = {};
 // ⚙️ COOLDOWN FUNCTION
 // ======================================
 function canSendAlert(key, cooldownMs = 10 * 60 * 1000) {
-const now = Date.now();
+    const now = Date.now();
 
-```
-if (!lastAlerts[key]) {
-    lastAlerts[key] = now;
-    return true;
-}
+    if (!lastAlerts[key]) {
+        lastAlerts[key] = now;
+        return true;
+    }
 
-if (now - lastAlerts[key] > cooldownMs) {
-    lastAlerts[key] = now;
-    return true;
-}
+    if (now - lastAlerts[key] > cooldownMs) {
+        lastAlerts[key] = now;
+        return true;
+    }
 
-return false;
-```
-
+    return false;
 }
 
 // 🔐 TELEGRAM CONFIG
@@ -36,42 +35,50 @@ const TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
 const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE";
 
 // ======================================
-// 📡 TELEGRAM ALERT FUNCTION
+// 📡 TELEGRAM ALERT
 // ======================================
 async function sendTelegramAlert(message) {
-try {
-await axios.post(
-`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-{
-chat_id: TELEGRAM_CHAT_ID,
-text: message,
-parse_mode: "HTML"
-}
-);
+    try {
+        await axios.post(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+            {
+                chat_id: TELEGRAM_CHAT_ID,
+                text: message,
+                parse_mode: "HTML"
+            }
+        );
 
-```
-    console.log("📲 Telegram alert sent");
-} catch (err) {
-    console.log("❌ Telegram error:", err.message);
-}
-```
-
+        console.log("📲 Telegram alert sent");
+    } catch (err) {
+        console.log("❌ Telegram error:", err.message);
+    }
 }
 
 // ======================================
-// ✅ CORE ENGINE
+// CORE ENGINE IMPORTS
 // ======================================
 const {
-loadIncidents,
-getRiskLevel,
-generateZones,
-calculateConfidence
+    loadIncidents,
+    getRiskLevel,
+    generateZones,
+    calculateConfidence
 } = require('./engine');
 
 const { runSentinel } = require('./engine/sentinel');
 const { fetchNews } = require('./news');
 
+// ======================================
+// EXPRESS + SOCKET SETUP
+// ======================================
 const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
+
+// expose globally for other functions
+global.io = io;
 
 app.use(express.json());
 app.use(cors());
@@ -81,226 +88,203 @@ const INCIDENT_FILE = 'incidents.json';
 const REPORT_FILE = 'reports.json';
 
 // ======================================
+// SOCKET CONNECTION HANDLER
+// ======================================
+io.on("connection", (socket) => {
+    console.log("🟢 Client connected:", socket.id);
+
+    socket.emit("welcome", {
+        message: "NaijaShield live stream active"
+    });
+
+    socket.on("disconnect", () => {
+        console.log("🔴 Client disconnected:", socket.id);
+    });
+});
+
+// ======================================
 // 📌 REPORT INCIDENT
 // ======================================
 app.post('/report', (req, res) => {
-let incidents = load(INCIDENT_FILE) || [];
+    let incidents = load(INCIDENT_FILE) || [];
+    if (!Array.isArray(incidents)) incidents = [];
 
-```
-if (!Array.isArray(incidents)) {
-    incidents = [];
-}
+    const newIncident = {
+        id: Date.now(),
+        ...req.body,
+        type: "user",
+        time: new Date()
+    };
 
-const newIncident = {
-    id: Date.now(),
-    ...req.body,
-    type: "user",
-    time: new Date()
-};
+    incidents.push(newIncident);
+    save(INCIDENT_FILE, incidents);
 
-incidents.push(newIncident);
-save(INCIDENT_FILE, incidents);
+    // 🔥 LIVE STREAM INCIDENT
+    io.emit("incident", newIncident);
 
-res.json({ message: "Incident recorded", data: newIncident });
-```
-
+    res.json({ message: "Incident recorded", data: newIncident });
 });
 
 // ======================================
 // 📌 GET INCIDENTS
 // ======================================
 app.get('/incidents', (req, res) => {
-res.json(loadIncidents());
+    res.json(loadIncidents());
 });
 
 // ======================================
 // 📌 GET REPORTS
 // ======================================
 app.get('/reports', (req, res) => {
-let reports = load(REPORT_FILE) || [];
+    let reports = load(REPORT_FILE) || [];
+    if (!Array.isArray(reports)) reports = [];
 
-```
-if (!Array.isArray(reports)) {
-    reports = [];
-}
-
-res.json(reports);
-```
-
+    res.json(reports);
 });
 
 // ======================================
 // 🧠 SAFE ZONE
 // ======================================
 function randomZone() {
-const zones = [
-{ name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
-{ name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
-{ name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
-];
+    const zones = [
+        { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
+        { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
+        { name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
+    ];
 
-```
-const index = Math.floor(Math.random() * zones.length);
-return zones[index];
-```
-
+    return zones[Math.floor(Math.random() * zones.length)];
 }
 
 // ======================================
 // 🧠 INCIDENT SIMULATOR
 // ======================================
 function generateIncident() {
-let incidents = load(INCIDENT_FILE) || [];
+    let incidents = load(INCIDENT_FILE) || [];
+    if (!Array.isArray(incidents)) incidents = [];
 
-```
-if (!Array.isArray(incidents)) {
-    incidents = [];
-}
+    const zone = randomZone();
 
-const zone = randomZone();
+    const messages = [
+        "Suspicious movement detected",
+        "Kidnap risk signal emerging",
+        "Gunmen activity reported",
+        "Security anomaly flagged",
+        "Community distress signal detected"
+    ];
 
-const messages = [
-    "Suspicious movement detected",
-    "Kidnap risk signal emerging",
-    "Gunmen activity reported",
-    "Security anomaly flagged",
-    "Community distress signal detected"
-];
+    const incident = {
+        id: Date.now(),
+        location: zone.name,
+        lat: zone.lat + (Math.random() * 0.05),
+        lng: zone.lng + (Math.random() * 0.05),
+        description: messages[Math.floor(Math.random() * messages.length)],
+        type: ["keyword", "news", "user"][Math.floor(Math.random() * 3)],
+        time: new Date()
+    };
 
-const incident = {
-    id: Date.now(),
-    location: zone.name,
-    lat: zone.lat + (Math.random() * 0.05),
-    lng: zone.lng + (Math.random() * 0.05),
-    description: messages[Math.floor(Math.random() * messages.length)],
-    type: ["keyword", "news", "user"][Math.floor(Math.random() * 3)],
-    time: new Date()
-};
+    incidents.push(incident);
+    save(INCIDENT_FILE, incidents);
 
-incidents.push(incident);
-save(INCIDENT_FILE, incidents);
+    console.log("🧠 SIM:", incident.description);
 
-console.log("🧠 SIM:", incident.description);
-```
-
+    // 🔥 LIVE STREAM INCIDENT
+    io.emit("incident", incident);
 }
 
 setInterval(generateIncident, 20000);
 
 // ======================================
-// 🧠 ANALYSIS
+// 🧠 ANALYSIS ENGINE
 // ======================================
 function analyzeSystem() {
-const incidents = loadIncidents() || [];
-const zones = generateZones(incidents);
+    const incidents = loadIncidents() || [];
+    const zones = generateZones(incidents);
 
-```
-return zones.map(zone => ({
-    zone: zone.name,
-    risk: getRiskLevel(zone.incidents || []),
-    confidence: calculateConfidence(zone.incidents || []),
-    incidentCount: (zone.incidents || []).length
-}));
-```
-
+    return zones.map(zone => ({
+        zone: zone.name,
+        risk: getRiskLevel(zone.incidents || []),
+        confidence: calculateConfidence(zone.incidents || []),
+        incidentCount: (zone.incidents || []).length
+    }));
 }
 
 // ======================================
 // 📊 REPORT ENGINE
 // ======================================
 function generateReport() {
-const incidents = loadIncidents() || [];
-const today = new Date().toDateString();
+    const incidents = loadIncidents() || [];
+    const today = new Date().toDateString();
 
-```
-const todayData = incidents.filter(i =>
-    new Date(i.time).toDateString() === today
-);
+    const todayData = incidents.filter(i =>
+        new Date(i.time).toDateString() === today
+    );
 
-const breakdown = { user: 0, news: 0, keyword: 0 };
+    const breakdown = { user: 0, news: 0, keyword: 0 };
 
-todayData.forEach(i => {
-    breakdown[i.type] = (breakdown[i.type] || 0) + 1;
-});
+    todayData.forEach(i => {
+        breakdown[i.type] = (breakdown[i.type] || 0) + 1;
+    });
 
-const zones = analyzeSystem();
-const highRisk = zones.filter(z => z.risk === "HIGH");
+    const zones = analyzeSystem();
+    const highRisk = zones.filter(z => z.risk === "HIGH");
 
-const report = {
-    date: today,
-    total: todayData.length,
-    breakdown,
-    zones,
-    alerts: highRisk
-};
+    const report = {
+        date: today,
+        total: todayData.length,
+        breakdown,
+        zones,
+        alerts: highRisk
+    };
 
-let reports = load(REPORT_FILE) || [];
+    let reports = load(REPORT_FILE) || [];
+    if (!Array.isArray(reports)) reports = [];
 
-if (!Array.isArray(reports)) {
-    reports = [];
-}
+    const existing = reports.find(r => r.date === today);
 
-const existing = reports.find(r => r.date === today);
+    if (existing) Object.assign(existing, report);
+    else reports.push(report);
 
-if (existing) {
-    Object.assign(existing, report);
-} else {
-    reports.push(report);
-}
+    save(REPORT_FILE, reports);
 
-save(REPORT_FILE, reports);
+    console.log("📰 REPORT GENERATED");
 
-console.log("📰 REPORT GENERATED");
-```
-
+    // 🔥 LIVE STREAM REPORT
+    io.emit("report", report);
 }
 
 // ======================================
 // 🔥 CLUSTER DETECTOR
 // ======================================
 function detectThreatClusters(incidents) {
+    const clusters = {};
 
-```
-const clusters = {};
+    incidents.forEach(i => {
+        const zone = i.location || "Unknown";
+        if (!clusters[zone]) clusters[zone] = [];
+        clusters[zone].push(i);
+    });
 
-incidents.forEach(i => {
-    const zone = i.location || "Unknown";
+    const results = [];
 
-    if (!clusters[zone]) {
-        clusters[zone] = [];
-    }
+    Object.keys(clusters).forEach(zone => {
+        const list = clusters[zone];
 
-    clusters[zone].push(i);
-});
+        const now = Date.now();
+        const recent = list.filter(i =>
+            now - new Date(i.time).getTime() < 3600000
+        );
 
-const results = [];
+        if (recent.length >= 5) {
+            results.push({
+                zone,
+                count: recent.length,
+                score: Math.min(100, recent.length * 10),
+                trend: "Rising"
+            });
+        }
+    });
 
-Object.keys(clusters).forEach(zone => {
-    const list = clusters[zone];
-
-    if (list.length < 5) return;
-
-    const now = Date.now();
-    const recent = list.filter(i =>
-        now - new Date(i.time).getTime() < 60 * 60 * 1000
-    );
-
-    if (recent.length >= 5) {
-
-        const score = Math.min(100, recent.length * 10);
-
-        results.push({
-            zone,
-            count: recent.length,
-            score,
-            trend: "Rising"
-        });
-    }
-});
-
-return results;
-```
-
+    return results;
 }
 
 // ======================================
@@ -308,19 +292,13 @@ return results;
 // ======================================
 async function sendClusterAlert(cluster) {
 
-```
-const alertKey = `cluster-${cluster.zone}`;
+    const alertKey = `cluster-${cluster.zone}`;
 
-if (!canSendAlert(alertKey, 15 * 60 * 1000)) {
-    console.log("⏳ Cluster alert suppressed");
-    return;
-}
+    if (!canSendAlert(alertKey, 15 * 60 * 1000)) return;
 
-console.log("🔥 CLUSTER ALERT TRIGGERED");
+    console.log("🔥 CLUSTER ALERT");
 
-await sendTelegramAlert(`
-```
-
+    await sendTelegramAlert(`
 🚨 <b>REGIONAL THREAT CLUSTER DETECTED</b>
 
 📍 <b>${cluster.zone}</b>
@@ -328,57 +306,43 @@ await sendTelegramAlert(`
 📊 Incidents: ${cluster.count}
 📈 Trend: ${cluster.trend}
 
-⚠️ Multiple correlated threat signals detected.
-
 Risk Score: ${cluster.score}/100
-
-🧠 AI recommends immediate monitoring.
-`);
+    `);
 }
 
 // ======================================
-// 🤖 SENTINEL LOOP (UPGRADED)
+// 🤖 SENTINEL LOOP
 // ======================================
 setInterval(async () => {
 
-```
-console.log("🧠 Sentinel scanning...");
+    console.log("🧠 Sentinel scanning...");
 
-const risk = await runSentinel();
+    const risk = await runSentinel();
+    const incidents = loadIncidents() || [];
 
-const incidents = loadIncidents() || [];
+    const clusters = detectThreatClusters(incidents);
 
-const clusters = detectThreatClusters(incidents);
+    for (const cluster of clusters) {
+        await sendClusterAlert(cluster);
+    }
 
-for (const cluster of clusters) {
-    await sendClusterAlert(cluster);
-}
+    if (risk === "HIGH" && clusters.length === 0) {
 
-if (risk === "HIGH" && clusters.length === 0) {
+        const alertKey = `sentinel-${risk}`;
 
-    const alertKey = `sentinel-${risk}`;
+        if (canSendAlert(alertKey)) {
 
-    if (canSendAlert(alertKey)) {
-
-        console.log("🚨 HIGH RISK (NO CLUSTER)");
-
-        await sendTelegramAlert(`
-```
-
+            await sendTelegramAlert(`
 🚨 <b>HIGH RISK ALERT</b>
 
 System detected elevated threat signals.
 
 📍 Time: ${new Date().toLocaleString()}
+            `);
+        }
+    }
 
-⚠️ No cluster formed yet, but risk is high.
-`);
-}
-}
-
-```
-generateReport();
-```
+    generateReport();
 
 }, 600000);
 
@@ -386,13 +350,13 @@ generateReport();
 // 📰 NEWS LOOP
 // ======================================
 setInterval(async () => {
-console.log("📰 Fetching intelligence...");
-await fetchNews();
+    console.log("📰 Fetching intelligence...");
+    await fetchNews();
 }, 30000);
 
 // ======================================
-// 🚀 START SERVER
+// 🚀 START SERVER (SOCKET ENABLED)
 // ======================================
-app.listen(3000, () => {
-console.log("🚀 NaijaShield Sentinel running on port 3000");
+server.listen(3000, () => {
+    console.log("🚀 NaijaShield LIVE STREAM running on port 3000");
 });
