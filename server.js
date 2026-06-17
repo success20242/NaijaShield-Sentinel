@@ -7,7 +7,7 @@ const { Server } = require('socket.io');
 const { load, save } = require('./utils');
 
 // ======================================
-// 🧠 LOGGER
+// 🧠 LOGGER (CLEAN V3)
 // ======================================
 const log = {
     ok: (msg) => console.log(`[OK] ${msg}`),
@@ -21,9 +21,6 @@ const log = {
 // ======================================
 const lastAlerts = {};
 
-// ======================================
-// ⚙️ COOLDOWN
-// ======================================
 function canSendAlert(key, cooldownMs = 10 * 60 * 1000) {
     const now = Date.now();
 
@@ -43,8 +40,8 @@ function canSendAlert(key, cooldownMs = 10 * 60 * 1000) {
 // ======================================
 // 🔐 TELEGRAM
 // ======================================
-const TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
-const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "YOUR_BOT_TOKEN_HERE";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "YOUR_CHAT_ID_HERE";
 
 async function sendTelegramAlert(message) {
     try {
@@ -62,6 +59,17 @@ async function sendTelegramAlert(message) {
         log.error("Telegram error: " + err.message);
     }
 }
+
+// ======================================
+// 🌍 NIGERIA FULL COVERAGE (NO MOCK)
+// ======================================
+const NIGERIA_STATES = [
+    "Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno",
+    "Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","Gombe","Imo",
+    "Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos",
+    "Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers",
+    "Sokoto","Taraba","Yobe","Zamfara","FCT"
+];
 
 // ======================================
 // CORE IMPORTS
@@ -91,14 +99,17 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static('public'));
 
+const INCIDENT_FILE = 'incidents.json';
+const REPORT_FILE = 'reports.json';
+
 // ======================================
-// SOCKET CONNECTION
+// SOCKET EVENTS
 // ======================================
 io.on("connection", (socket) => {
     log.ok("Client connected: " + socket.id);
 
     socket.emit("welcome", {
-        message: "NaijaShield live stream active"
+        message: "NaijaShield Intelligence V3 Active"
     });
 
     socket.on("disconnect", () => {
@@ -107,13 +118,7 @@ io.on("connection", (socket) => {
 });
 
 // ======================================
-// FILES
-// ======================================
-const INCIDENT_FILE = 'incidents.json';
-const REPORT_FILE = 'reports.json';
-
-// ======================================
-// REPORT INCIDENT
+// INCIDENT REPORTING
 // ======================================
 app.post('/report', (req, res) => {
 
@@ -136,7 +141,7 @@ app.post('/report', (req, res) => {
 });
 
 // ======================================
-// GET INCIDENTS
+// FETCH INCIDENTS
 // ======================================
 app.get('/incidents', (req, res) => {
     const data = load(INCIDENT_FILE) || [];
@@ -144,7 +149,7 @@ app.get('/incidents', (req, res) => {
 });
 
 // ======================================
-// GET REPORTS
+// FETCH REPORTS
 // ======================================
 app.get('/reports', (req, res) => {
     const data = load(REPORT_FILE) || [];
@@ -152,74 +157,42 @@ app.get('/reports', (req, res) => {
 });
 
 // ======================================
-// SAFE ZONE
+// 🧠 GEO INTELLIGENCE ENGINE (REAL COVERAGE)
 // ======================================
-function randomZone() {
-    const zones = [
-        { name: "Lagos Axis", lat: 6.5244, lng: 3.3792 },
-        { name: "Oyo Corridor", lat: 7.3775, lng: 3.9470 },
-        { name: "Abuja Belt", lat: 9.0765, lng: 7.3986 }
-    ];
+function geoIntelligence(incidents) {
 
-    return zones[Math.floor(Math.random() * zones.length)];
-}
+    const map = {};
 
-// ======================================
-// INCIDENT SIMULATOR (SLOWED + SMART)
-// ======================================
-function generateIncident() {
+    // initialize all states (no fake missing coverage)
+    for (const state of NIGERIA_STATES) {
+        map[state] = [];
+    }
 
-    // 🔥 optional noise reduction
-    if (Math.random() > 0.5) return;
+    for (const i of incidents) {
+        if (!i?.location) continue;
 
-    let incidents = load(INCIDENT_FILE) || [];
-    if (!Array.isArray(incidents)) incidents = [];
+        const loc = i.location;
 
-    const zone = randomZone();
+        if (map[loc]) {
+            map[loc].push(i);
+        }
+    }
 
-    const messages = [
-        "Suspicious movement detected",
-        "Kidnap risk signal emerging",
-        "Gunmen activity reported",
-        "Security anomaly flagged",
-        "Community distress signal detected"
-    ];
+    return Object.entries(map).map(([state, list]) => {
 
-    const incident = {
-        id: Date.now(),
-        location: zone.name,
-        lat: zone.lat + (Math.random() * 0.05),
-        lng: zone.lng + (Math.random() * 0.05),
-        description: messages[Math.floor(Math.random() * messages.length)],
-        type: ["keyword", "news", "user"][Math.floor(Math.random() * 3)],
-        time: new Date()
-    };
+        const riskScore = list.length;
 
-    incidents.push(incident);
-    save(INCIDENT_FILE, incidents);
+        let risk = "LOW";
+        if (riskScore > 20) risk = "HIGH";
+        else if (riskScore > 8) risk = "MEDIUM";
 
-    log.info("SIM: " + incident.description);
-
-    io.emit("incident", incident);
-}
-
-// ⬇️ FIXED INTERVAL (was 20000)
-setInterval(generateIncident, 60000);
-
-// ======================================
-// ANALYSIS
-// ======================================
-function analyzeSystem() {
-
-    const incidents = load(INCIDENT_FILE) || [];
-    const zones = generateZones(incidents);
-
-    return zones.map(zone => ({
-        zone: zone.name,
-        risk: zone.risk || "LOW",
-        confidence: calculateConfidence(zone.incidents || []),
-        incidentCount: (zone.incidents || []).length
-    }));
+        return {
+            zone: state,
+            risk,
+            confidence: Math.min(100, riskScore * 4),
+            incidentCount: list.length
+        };
+    });
 }
 
 // ======================================
@@ -236,11 +209,11 @@ function generateReport() {
 
     const breakdown = { user: 0, news: 0, keyword: 0 };
 
-    todayData.forEach(i => {
+    for (const i of todayData) {
         breakdown[i.type] = (breakdown[i.type] || 0) + 1;
-    });
+    }
 
-    const zones = analyzeSystem();
+    const zones = geoIntelligence(incidents);
     const highRisk = zones.filter(z => z.risk === "HIGH");
 
     const report = {
@@ -263,11 +236,11 @@ function generateReport() {
 
     io.emit("report", report);
 
-    log.ok("Report generated");
+    log.ok("Report generated V3");
 }
 
 // ======================================
-// CLUSTER DETECTOR
+// CLUSTER DETECTOR (IMPROVED)
 // ======================================
 function detectThreatClusters(incidents) {
 
@@ -287,10 +260,9 @@ function detectThreatClusters(incidents) {
     for (const zone in clusters) {
 
         const list = clusters[zone];
-        const now = Date.now();
 
         const recent = list.filter(i =>
-            now - new Date(i.time).getTime() < 3600000
+            Date.now() - new Date(i.time).getTime() < 3600000
         );
 
         if (recent.length >= 5) {
@@ -311,7 +283,7 @@ function detectThreatClusters(incidents) {
 // ======================================
 setInterval(async () => {
 
-    log.info("Sentinel scanning...");
+    log.info("Sentinel V3 scanning...");
 
     const result = await runSentinel();
     const risk = typeof result === "object" ? result.risk : result;
@@ -330,7 +302,7 @@ setInterval(async () => {
 
         if (canSendAlert(key)) {
             await sendTelegramAlert(`
-🚨 HIGH RISK ALERT
+🚨 HIGH RISK ALERT (V3)
 
 Time: ${new Date().toLocaleString()}
             `);
@@ -342,18 +314,19 @@ Time: ${new Date().toLocaleString()}
 }, 600000);
 
 // ======================================
-// NEWS LOOP (RATE LIMITED FIXED)
+// NEWS ENGINE (REAL INTELLIGENCE SOURCES)
 // ======================================
 let lastNewsFetch = 0;
 
 setInterval(async () => {
 
     const now = Date.now();
-
     if (now - lastNewsFetch < 60000) return;
+
     lastNewsFetch = now;
 
-    log.info("Fetching intelligence...");
+    log.info("Fetching global intelligence...");
+
     await fetchNews();
 
 }, 60000);
@@ -362,5 +335,5 @@ setInterval(async () => {
 // START SERVER
 // ======================================
 server.listen(3000, () => {
-    log.ok("NaijaShield LIVE STREAM running on port 3000");
+    log.ok("NaijaShield Intelligence Dashboard V3 running on port 3000");
 });
