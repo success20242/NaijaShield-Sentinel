@@ -1,4 +1,4 @@
-// news.js
+// news.js (UPGRADED INTELLIGENCE LAYER)
 
 const Parser = require('rss-parser');
 const axios = require('axios');
@@ -13,74 +13,113 @@ const parser = new Parser();
 
 const INCIDENT_FILE = 'incidents.json';
 
-// ===============================
-// 🌐 RSS SOURCES
-// ===============================
+// ======================================
+// 🧠 GLOBAL NEWS COOLDOWN (PREVENT 429)
+// ======================================
+let lastFetchTime = 0;
+const NEWS_COOLDOWN = 60 * 1000; // 1 minute
+
+function canFetchNews() {
+    const now = Date.now();
+    if (now - lastFetchTime < NEWS_COOLDOWN) return false;
+    lastFetchTime = now;
+    return true;
+}
+
+// ======================================
+// 🌐 RSS SOURCES (EXPANDED)
+// ======================================
 const feeds = [
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://news.google.com/rss/search?q=nigeria+kidnap+attack&hl=en-US&gl=US&ceid=US:en"
+    "https://feeds.bbci.co.uk/news/africa/rss.xml",
+    "https://news.google.com/rss/search?q=nigeria+kidnap+OR+attack+OR+security&hl=en&gl=US&ceid=US:en"
 ];
 
-
-// ===============================
-// 🧠 ADVANCED DUPLICATE FILTER
-// ===============================
+// ======================================
+// 🧠 DUPLICATE FILTER (STRONGER)
+// ======================================
 function isDuplicate(incidents, title) {
-    return incidents.some(i =>
-        i.description === title ||
-        i.description.includes(title.substring(0, 30))
-    );
+    if (!Array.isArray(incidents)) return false;
+
+    return incidents.some(i => {
+        if (!i?.description) return false;
+
+        const existing = i.description.toLowerCase();
+        const incoming = title.toLowerCase();
+
+        return (
+            existing === incoming ||
+            existing.includes(incoming.substring(0, 40)) ||
+            incoming.includes(existing.substring(0, 40))
+        );
+    });
 }
 
-
-// ===============================
-// 🧠 BUILD INCIDENT OBJECT
-// ===============================
+// ======================================
+// 🧠 INCIDENT BUILDER (SAFE + FILTERED)
+// ======================================
 async function buildIncident(rawText, title, source) {
 
-    const analysis = analyzeText(rawText);
-    if (analysis.score === 0) return null;
+    try {
+        const analysis = analyzeText(rawText);
 
-    const locationName = extractLocation(rawText);
+        // 🚫 ignore weak signals
+        if (!analysis || analysis.score < 2) return null;
 
-    // 🌍 REAL GEO
-    const coords = await getCoordinates(locationName);
+        const locationName = extractLocation(rawText) || "Nigeria";
 
-    return {
-        id: Date.now() + Math.random(),
-        location: locationName,
-        lat: coords?.lat || 9.0820,
-        lng: coords?.lng || 8.6753,
+        // 🌍 GEO FALLBACK (Nigeria center if fail)
+        let coords = await getCoordinates(locationName);
 
-        description: title,
-        type: "news",
-        source,
+        if (!coords || !coords.lat) {
+            coords = { lat: 9.0820, lng: 8.6753 }; // Nigeria fallback
+        }
 
-        risk: analysis.risk,
-        keywords: analysis.keywords,
-        score: analysis.score,
+        return {
+            id: Date.now() + Math.random(),
+            location: locationName,
+            lat: coords.lat,
+            lng: coords.lng,
 
-        time: new Date()
-    };
+            description: title,
+            type: "news",
+            source,
+
+            risk: analysis.risk || "LOW",
+            keywords: analysis.keywords || [],
+            score: analysis.score || 0,
+
+            time: new Date()
+        };
+
+    } catch (err) {
+        console.log("[NEWS BUILDER ERROR]", err.message);
+        return null;
+    }
 }
 
-
-// ===============================
-// 📰 RSS ENGINE
-// ===============================
+// ======================================
+// 📰 RSS ENGINE (SAFE MODE)
+// ======================================
 async function fetchRSS(incidents) {
 
     let count = 0;
 
     for (let url of feeds) {
+
         try {
             const feed = await parser.parseURL(url);
 
-            for (let item of feed.items.slice(0, 10)) {
+            const items = (feed.items || []).slice(0, 8);
+
+            for (let item of items) {
+
+                if (!item?.title) continue;
 
                 if (isDuplicate(incidents, item.title)) continue;
 
-                const rawText = item.title + " " + (item.contentSnippet || "");
+                const rawText =
+                    (item.title || "") + " " + (item.contentSnippet || "");
 
                 const incident = await buildIncident(
                     rawText,
@@ -93,26 +132,28 @@ async function fetchRSS(incidents) {
                 incidents.push(incident);
                 count++;
 
-                console.log("🧠 RSS:", incident.description);
+                console.log("[RSS]", incident.description);
 
-                // 🚨 ESCALATION TRIGGER
+                // 🚨 ONLY ESCALATE HIGH RISK
                 if (incident.risk === "HIGH") {
-                    await sendTelegramAlert(incident);
+                    await sendTelegramAlert({
+                        message: "HIGH RISK NEWS DETECTED",
+                        data: incident
+                    });
                 }
             }
 
         } catch (err) {
-            console.log("RSS ERROR:", err.message);
+            console.log("[RSS ERROR]", err.message);
         }
     }
 
     return count;
 }
 
-
-// ===============================
-// 🌍 GDELT ENGINE
-// ===============================
+// ======================================
+// 🌍 GDELT ENGINE (RATE LIMIT SAFE)
+// ======================================
 async function fetchGDELT(incidents) {
 
     let count = 0;
@@ -122,22 +163,25 @@ async function fetchGDELT(incidents) {
             "https://api.gdeltproject.org/api/v2/doc/doc",
             {
                 params: {
-                    query: "kidnap OR attack OR gunmen OR abduction",
+                    query: "kidnap OR attack OR gunmen OR abduction OR violence",
                     mode: "ArtList",
                     format: "json",
-                    maxrecords: 20
-                }
+                    maxrecords: 15
+                },
+                timeout: 8000
             }
         );
 
-        for (let article of res.data.articles || []) {
+        const articles = res.data?.articles || [];
+
+        for (let article of articles) {
+
+            if (!article?.title) continue;
 
             if (isDuplicate(incidents, article.title)) continue;
 
-            const rawText = article.title;
-
             const incident = await buildIncident(
-                rawText,
+                article.title,
                 article.title,
                 "GDELT"
             );
@@ -147,35 +191,51 @@ async function fetchGDELT(incidents) {
             incidents.push(incident);
             count++;
 
-            console.log("🌍 GDELT:", article.title);
+            console.log("[GDELT]", article.title);
 
-            // 🚨 ESCALATION
             if (incident.risk === "HIGH") {
-                await sendTelegramAlert(incident);
+                await sendTelegramAlert({
+                    message: "HIGH RISK GDELT ALERT",
+                    data: incident
+                });
             }
         }
 
     } catch (err) {
-        console.log("GDELT ERROR:", err.message);
+
+        // 🔥 IMPORTANT: prevents spam logs + respects 429
+        if (err.response?.status === 429) {
+            console.log("[GDELT] RATE LIMITED - backing off");
+        } else {
+            console.log("[GDELT ERROR]", err.message);
+        }
     }
 
     return count;
 }
 
-
-// ===============================
-// 🧠 MASTER FUNCTION
-// ===============================
+// ======================================
+// 🧠 MASTER FUNCTION (CONTROLLED EXECUTION)
+// ======================================
 async function fetchNews() {
 
-    const incidents = load(INCIDENT_FILE);
+    if (!canFetchNews()) {
+        console.log("[NEWS] cooldown active - skipping fetch");
+        return;
+    }
+
+    let incidents = load(INCIDENT_FILE);
+
+    if (!Array.isArray(incidents)) {
+        incidents = [];
+    }
 
     const rss = await fetchRSS(incidents);
     const gdelt = await fetchGDELT(incidents);
 
     save(INCIDENT_FILE, incidents);
 
-    console.log(`📰 TOTAL → RSS: ${rss}, GDELT: ${gdelt}`);
+    console.log(`[NEWS SUMMARY] RSS: ${rss}, GDELT: ${gdelt}`);
 }
 
 module.exports = { fetchNews };
