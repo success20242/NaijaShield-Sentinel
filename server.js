@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -8,7 +7,7 @@ const { Server } = require('socket.io');
 const { load, save } = require('./utils');
 
 // ======================================
-// 🧠 LOGGER (clean system utility)
+// 🧠 LOGGER
 // ======================================
 const log = {
     ok: (msg) => console.log(`[OK] ${msg}`),
@@ -16,13 +15,14 @@ const log = {
     error: (msg) => console.log(`[ERROR] ${msg}`),
     info: (msg) => console.log(`[INFO] ${msg}`)
 };
+
 // ======================================
 // ⚙️ ALERT MEMORY
 // ======================================
 const lastAlerts = {};
 
 // ======================================
-// ⚙️ COOLDOWN FUNCTION
+// ⚙️ COOLDOWN
 // ======================================
 function canSendAlert(key, cooldownMs = 10 * 60 * 1000) {
     const now = Date.now();
@@ -40,13 +40,12 @@ function canSendAlert(key, cooldownMs = 10 * 60 * 1000) {
     return false;
 }
 
-// 🔐 TELEGRAM CONFIG
+// ======================================
+// 🔐 TELEGRAM
+// ======================================
 const TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
 const TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE";
 
-// ======================================
-// 📡 TELEGRAM ALERT
-// ======================================
 async function sendTelegramAlert(message) {
     try {
         await axios.post(
@@ -58,18 +57,17 @@ async function sendTelegramAlert(message) {
             }
         );
 
-        console.log("📲 Telegram alert sent");
+        log.ok("Telegram alert sent");
     } catch (err) {
-        console.log("❌ Telegram error:", err.message);
+        log.error("Telegram error: " + err.message);
     }
 }
 
 // ======================================
-// CORE ENGINE IMPORTS
+// CORE IMPORTS
 // ======================================
 const {
     loadIncidents,
-    getRiskLevel,
     generateZones,
     calculateConfidence
 } = require('./engine');
@@ -78,7 +76,7 @@ const { runSentinel } = require('./engine/sentinel');
 const { fetchNews } = require('./news');
 
 // ======================================
-// EXPRESS + SOCKET SETUP
+// EXPRESS + SOCKET
 // ======================================
 const app = express();
 const server = http.createServer(app);
@@ -87,35 +85,38 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// expose globally for other functions
 global.io = io;
 
 app.use(express.json());
 app.use(cors());
 app.use(express.static('public'));
 
-const INCIDENT_FILE = 'incidents.json';
-const REPORT_FILE = 'reports.json';
-
 // ======================================
-// SOCKET CONNECTION HANDLER
+// SOCKET CONNECTION
 // ======================================
 io.on("connection", (socket) => {
-    console.log("🟢 Client connected:", socket.id);
+    log.ok("Client connected: " + socket.id);
 
     socket.emit("welcome", {
         message: "NaijaShield live stream active"
     });
 
     socket.on("disconnect", () => {
-        console.log("🔴 Client disconnected:", socket.id);
+        log.warn("Client disconnected: " + socket.id);
     });
 });
 
 // ======================================
-// 📌 REPORT INCIDENT
+// FILES
+// ======================================
+const INCIDENT_FILE = 'incidents.json';
+const REPORT_FILE = 'reports.json';
+
+// ======================================
+// REPORT INCIDENT
 // ======================================
 app.post('/report', (req, res) => {
+
     let incidents = load(INCIDENT_FILE) || [];
     if (!Array.isArray(incidents)) incidents = [];
 
@@ -129,31 +130,29 @@ app.post('/report', (req, res) => {
     incidents.push(newIncident);
     save(INCIDENT_FILE, incidents);
 
-    // 🔥 LIVE STREAM INCIDENT
     io.emit("incident", newIncident);
 
-    res.json({ message: "Incident recorded", data: newIncident });
+    res.json({ ok: true, data: newIncident });
 });
 
 // ======================================
-// 📌 GET INCIDENTS
+// GET INCIDENTS
 // ======================================
 app.get('/incidents', (req, res) => {
-    res.json(loadIncidents());
+    const data = load(INCIDENT_FILE) || [];
+    res.json(Array.isArray(data) ? data : []);
 });
 
 // ======================================
-// 📌 GET REPORTS
+// GET REPORTS
 // ======================================
 app.get('/reports', (req, res) => {
-    let reports = load(REPORT_FILE) || [];
-    if (!Array.isArray(reports)) reports = [];
-
-    res.json(reports);
+    const data = load(REPORT_FILE) || [];
+    res.json(Array.isArray(data) ? data : []);
 });
 
 // ======================================
-// 🧠 SAFE ZONE
+// SAFE ZONE
 // ======================================
 function randomZone() {
     const zones = [
@@ -166,9 +165,13 @@ function randomZone() {
 }
 
 // ======================================
-// 🧠 INCIDENT SIMULATOR
+// INCIDENT SIMULATOR (SLOWED + SMART)
 // ======================================
 function generateIncident() {
+
+    // 🔥 optional noise reduction
+    if (Math.random() > 0.5) return;
+
     let incidents = load(INCIDENT_FILE) || [];
     if (!Array.isArray(incidents)) incidents = [];
 
@@ -195,34 +198,36 @@ function generateIncident() {
     incidents.push(incident);
     save(INCIDENT_FILE, incidents);
 
-    console.log("🧠 SIM:", incident.description);
+    log.info("SIM: " + incident.description);
 
-    // 🔥 LIVE STREAM INCIDENT
     io.emit("incident", incident);
 }
 
-setInterval(generateIncident, 20000);
+// ⬇️ FIXED INTERVAL (was 20000)
+setInterval(generateIncident, 60000);
 
 // ======================================
-// 🧠 ANALYSIS ENGINE
+// ANALYSIS
 // ======================================
 function analyzeSystem() {
-    const incidents = loadIncidents() || [];
+
+    const incidents = load(INCIDENT_FILE) || [];
     const zones = generateZones(incidents);
 
     return zones.map(zone => ({
         zone: zone.name,
-        risk: getRiskLevel(zone.incidents || []),
+        risk: zone.risk || "LOW",
         confidence: calculateConfidence(zone.incidents || []),
         incidentCount: (zone.incidents || []).length
     }));
 }
 
 // ======================================
-// 📊 REPORT ENGINE
+// REPORT ENGINE
 // ======================================
 function generateReport() {
-    const incidents = loadIncidents() || [];
+
+    const incidents = load(INCIDENT_FILE) || [];
     const today = new Date().toDateString();
 
     const todayData = incidents.filter(i =>
@@ -256,30 +261,34 @@ function generateReport() {
 
     save(REPORT_FILE, reports);
 
-    console.log("📰 REPORT GENERATED");
-
-    // 🔥 LIVE STREAM REPORT
     io.emit("report", report);
+
+    log.ok("Report generated");
 }
 
 // ======================================
-// 🔥 CLUSTER DETECTOR
+// CLUSTER DETECTOR
 // ======================================
 function detectThreatClusters(incidents) {
+
+    if (!Array.isArray(incidents)) return [];
+
     const clusters = {};
 
-    incidents.forEach(i => {
-        const zone = i.location || "Unknown";
-        if (!clusters[zone]) clusters[zone] = [];
-        clusters[zone].push(i);
-    });
+    for (const i of incidents) {
+        if (!i?.location) continue;
+
+        clusters[i.location] = clusters[i.location] || [];
+        clusters[i.location].push(i);
+    }
 
     const results = [];
 
-    Object.keys(clusters).forEach(zone => {
-        const list = clusters[zone];
+    for (const zone in clusters) {
 
+        const list = clusters[zone];
         const now = Date.now();
+
         const recent = list.filter(i =>
             now - new Date(i.time).getTime() < 3600000
         );
@@ -292,62 +301,38 @@ function detectThreatClusters(incidents) {
                 trend: "Rising"
             });
         }
-    });
+    }
 
     return results;
 }
 
 // ======================================
-// 🔥 CLUSTER ALERT
-// ======================================
-async function sendClusterAlert(cluster) {
-
-    const alertKey = `cluster-${cluster.zone}`;
-
-    if (!canSendAlert(alertKey, 15 * 60 * 1000)) return;
-
-    console.log("🔥 CLUSTER ALERT");
-
-    await sendTelegramAlert(`
-🚨 <b>REGIONAL THREAT CLUSTER DETECTED</b>
-
-📍 <b>${cluster.zone}</b>
-
-📊 Incidents: ${cluster.count}
-📈 Trend: ${cluster.trend}
-
-Risk Score: ${cluster.score}/100
-    `);
-}
-
-// ======================================
-// 🤖 SENTINEL LOOP
+// SENTINEL LOOP
 // ======================================
 setInterval(async () => {
 
-    console.log("🧠 Sentinel scanning...");
+    log.info("Sentinel scanning...");
 
-    const risk = await runSentinel();
-    const incidents = loadIncidents() || [];
+    const result = await runSentinel();
+    const risk = typeof result === "object" ? result.risk : result;
+
+    const incidents = load(INCIDENT_FILE) || [];
 
     const clusters = detectThreatClusters(incidents);
 
     for (const cluster of clusters) {
-        await sendClusterAlert(cluster);
+        await sendTelegramAlert(`🚨 CLUSTER: ${cluster.zone}`);
     }
 
     if (risk === "HIGH" && clusters.length === 0) {
 
-        const alertKey = `sentinel-${risk}`;
+        const key = `sentinel-${risk}`;
 
-        if (canSendAlert(alertKey)) {
-
+        if (canSendAlert(key)) {
             await sendTelegramAlert(`
-🚨 <b>HIGH RISK ALERT</b>
+🚨 HIGH RISK ALERT
 
-System detected elevated threat signals.
-
-📍 Time: ${new Date().toLocaleString()}
+Time: ${new Date().toLocaleString()}
             `);
         }
     }
@@ -357,16 +342,25 @@ System detected elevated threat signals.
 }, 600000);
 
 // ======================================
-// 📰 NEWS LOOP
+// NEWS LOOP (RATE LIMITED FIXED)
 // ======================================
+let lastNewsFetch = 0;
+
 setInterval(async () => {
-    console.log("📰 Fetching intelligence...");
+
+    const now = Date.now();
+
+    if (now - lastNewsFetch < 60000) return;
+    lastNewsFetch = now;
+
+    log.info("Fetching intelligence...");
     await fetchNews();
-}, 30000);
+
+}, 60000);
 
 // ======================================
-// 🚀 START SERVER (SOCKET ENABLED)
+// START SERVER
 // ======================================
 server.listen(3000, () => {
-    console.log("[OK] NaijaShield LIVE STREAM running on port 3000");
+    log.ok("NaijaShield LIVE STREAM running on port 3000");
 });
