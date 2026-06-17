@@ -116,15 +116,21 @@
 
 </div>
 
-<!-- Scripts -->
+<!-- Leaflet -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+<!-- SOCKET.IO -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
 <script>
 let map;
 let clusterGroup;
 let heatLayer;
+
+// 🔌 SOCKET CONNECTION
+const socket = io("http://localhost:3000");
 
 // 🗺 INIT MAP
 function initMap() {
@@ -136,96 +142,6 @@ function initMap() {
 
     clusterGroup = L.markerClusterGroup();
     map.addLayer(clusterGroup);
-}
-
-// 📡 LOAD INCIDENTS
-async function loadIncidents() {
-    try {
-        const res = await fetch('/incidents');
-        const data = await res.json();
-
-        const list = document.getElementById('incidents');
-        list.innerHTML = "";
-
-        clusterGroup.clearLayers();
-
-        let heatPoints = [];
-
-        data.slice(-20).reverse().forEach(i => {
-
-            const description = i.description || i.desc || "No description";
-
-            const li = document.createElement('li');
-            li.textContent = `${i.location || "Unknown"} - ${description}`;
-            list.appendChild(li);
-
-            if (i.lat && i.lng) {
-
-                const marker = L.marker([i.lat, i.lng]);
-                marker.bindPopup(`<b>${i.location}</b><br>${description}`);
-                clusterGroup.addLayer(marker);
-
-                heatPoints.push([i.lat, i.lng, 0.6]);
-            }
-        });
-
-        // Refresh heatmap
-        if (heatLayer) {
-            map.removeLayer(heatLayer);
-        }
-
-        heatLayer = L.heatLayer(heatPoints, {
-            radius: 25,
-            blur: 15,
-            maxZoom: 10
-        }).addTo(map);
-
-    } catch (err) {
-        console.log("❌ Incident load error:", err);
-    }
-}
-
-// 🧠 LOAD RISK
-async function loadRisk() {
-    try {
-        const res = await fetch('/risk');
-        const data = await res.json();
-
-        const el = document.getElementById('riskLevel');
-        el.textContent = "Risk Level: " + data.risk;
-
-        if (data.risk === "HIGH") {
-            el.style.color = "red";
-            showAlert("🚨 HIGH RISK DETECTED");
-        } else if (data.risk === "MEDIUM") {
-            el.style.color = "orange";
-        } else {
-            el.style.color = "green";
-        }
-
-    } catch (err) {
-        console.log("❌ Risk load error");
-    }
-}
-
-// 📰 LOAD REPORTS
-async function loadReports() {
-    try {
-        const res = await fetch('/reports');
-        const data = await res.json();
-
-        const list = document.getElementById('reports');
-        list.innerHTML = "";
-
-        data.slice(-5).reverse().forEach(r => {
-            const li = document.createElement('li');
-            li.textContent = `📅 ${r.date} | Total: ${r.total}`;
-            list.appendChild(li);
-        });
-
-    } catch (err) {
-        console.log("❌ Report load error");
-    }
 }
 
 // 🚨 ALERT
@@ -257,22 +173,50 @@ async function report() {
 
     document.getElementById('location').value = "";
     document.getElementById('desc').value = "";
-
-    loadIncidents();
 }
 
-// 🔄 AUTO REFRESH
-setInterval(() => {
-    loadIncidents();
-    loadRisk();
-    loadReports();
-}, 10000);
+// ⚡ LIVE INCIDENT STREAM
+socket.on("incident", (i) => {
+    const list = document.getElementById('incidents');
+
+    const li = document.createElement('li');
+    li.textContent = `${i.location} - ${i.description}`;
+    list.prepend(li);
+
+    if (i.lat && i.lng) {
+        const marker = L.marker([i.lat, i.lng]);
+        marker.bindPopup(i.description);
+        marker.addTo(map);
+    }
+});
+
+// 🧠 LIVE RISK STREAM
+socket.on("risk", (data) => {
+    const el = document.getElementById('riskLevel');
+    el.textContent = "Risk Level: " + data.risk;
+
+    if (data.risk === "HIGH") {
+        el.style.color = "red";
+        showAlert("🚨 HIGH RISK DETECTED");
+    } else if (data.risk === "MEDIUM") {
+        el.style.color = "orange";
+    } else {
+        el.style.color = "green";
+    }
+});
+
+// 📰 LIVE REPORT STREAM
+socket.on("report", (r) => {
+    const list = document.getElementById('reports');
+
+    const li = document.createElement('li');
+    li.textContent = `📅 ${r.date} | Total: ${r.total}`;
+
+    list.prepend(li);
+});
 
 // 🚀 START
 initMap();
-loadIncidents();
-loadRisk();
-loadReports();
 </script>
 
 </body>
