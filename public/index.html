@@ -1,96 +1,30 @@
 <!DOCTYPE html>
-
 <html>
 <head>
     <title>NaijaShield Sentinel AI</title>
 
-```
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
 
-<style>
-    body {
-        margin: 0;
-        font-family: Arial;
-        background: #0b0f19;
-        color: white;
-    }
-
-    header {
-        padding: 15px;
-        background: #111827;
-    }
-
-    #map {
-        height: 60vh;
-        width: 100%;
-    }
-
-    .container {
-        padding: 15px;
-    }
-
-    .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-    }
-
-    input, textarea {
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 10px;
-    }
-
-    button {
-        padding: 10px 15px;
-        background: yellow;
-        border: none;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    ul {
-        list-style: none;
-        padding: 0;
-    }
-
-    li {
-        padding: 6px 0;
-        border-bottom: 1px solid #333;
-    }
-
-    .risk {
-        font-weight: bold;
-    }
-
-    #alertBanner {
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: red;
-        padding: 12px 20px;
-        font-weight: bold;
-        border-radius: 8px;
-        display: none;
-        z-index: 9999;
-    }
-
-    #feed {
-        margin-top: 20px;
-    }
-
-    .alert {
-        background: #1f2937;
-        padding: 10px;
-        margin-bottom: 10px;
-        border-left: 4px solid orange;
-    }
-</style>
-```
-
+    <style>
+        body { margin:0; font-family:Arial; background:#0b0f19; color:white; }
+        header { padding:15px; background:#111827; }
+        #map { height:60vh; width:100%; }
+        .container { padding:15px; }
+        .grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        input, textarea { width:100%; padding:10px; margin-bottom:10px; }
+        button { padding:10px 15px; background:yellow; border:none; cursor:pointer; font-weight:bold; }
+        ul { list-style:none; padding:0; }
+        li { padding:6px 0; border-bottom:1px solid #333; }
+        .risk { font-weight:bold; }
+        #alertBanner {
+            position:fixed; top:10px; left:50%;
+            transform:translateX(-50%);
+            background:red; padding:12px 20px;
+            display:none; z-index:9999;
+        }
+    </style>
 </head>
 
 <body>
@@ -104,58 +38,47 @@
 <div id="map"></div>
 
 <div class="container">
+    <div class="grid">
+        <div>
+            <h3>📍 Report Incident</h3>
+            <input id="location" placeholder="Location">
+            <textarea id="desc" placeholder="Describe incident"></textarea>
+            <button onclick="report()">Submit Report</button>
+        </div>
 
-```
-<div class="grid">
-
-    <div>
-        <h3>📍 Report Incident</h3>
-        <input id="location" placeholder="Location">
-        <textarea id="desc" placeholder="Describe incident"></textarea>
-        <button onclick="report()">Submit Report</button>
+        <div>
+            <h3>📡 Live Incidents</h3>
+            <ul id="incidents"></ul>
+        </div>
     </div>
 
-    <div>
-        <h3>📡 Live Incidents</h3>
-        <ul id="incidents"></ul>
-    </div>
+    <h3>🧠 Live Intelligence Feed</h3>
+    <ul id="feed"></ul>
 
-</div>
-
-<h3>🧠 Live Intelligence Feed</h3>
-<div id="feed"></div>
-
-<h3>📰 Daily Reports</h3>
-<ul id="reports"></ul>
-```
-
+    <h3>📰 Daily Reports</h3>
+    <ul id="reports"></ul>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
 <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
 <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
 <script>
-let map;
-let clusterGroup;
-let heatLayer;
+let map, clusterGroup, heatLayer;
 
-const socket = io("http://localhost:3000");
+// ✅ SOCKET FIX
+const socket = io();
 
-// 🗺 INIT MAP
+// 🗺 MAP
 function initMap() {
     map = L.map('map').setView([9.0820, 8.6753], 6);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+        .addTo(map);
 
     clusterGroup = L.markerClusterGroup();
     map.addLayer(clusterGroup);
-
-    heatLayer = L.heatLayer([], { radius: 25 }).addTo(map);
 }
 
 // 🚨 ALERT
@@ -163,11 +86,10 @@ function showAlert(msg) {
     const banner = document.getElementById('alertBanner');
     banner.textContent = msg;
     banner.style.display = "block";
-
     setTimeout(() => banner.style.display = "none", 4000);
 }
 
-// 📍 REPORT INCIDENT
+// 📍 REPORT
 async function report() {
     const location = document.getElementById('location').value;
     const desc = document.getElementById('desc').value;
@@ -184,74 +106,49 @@ async function report() {
     document.getElementById('desc').value = "";
 }
 
-// 🔴 INCIDENT STREAM
+// 📡 INCIDENT STREAM
 socket.on("incident", (i) => {
     const list = document.getElementById('incidents');
 
     const li = document.createElement('li');
     li.textContent = `${i.location} - ${i.description}`;
     list.prepend(li);
-});
 
-// 🧠 INTELLIGENCE STREAM (MAIN FIX)
-socket.on("intel_update", (data) => {
-    console.log("📡 Intel:", data);
-
-    updateDashboard(data.alerts);
-});
-
-// 📊 UPDATE DASHBOARD
-function updateDashboard(alerts) {
-
-    const feed = document.getElementById("feed");
-    clusterGroup.clearLayers();
-
-    let heatPoints = [];
-
-    feed.innerHTML = alerts.map(a => {
-
-        if (a.lat && a.lng) {
-            const marker = L.marker([a.lat, a.lng]);
-            clusterGroup.addLayer(marker);
-            heatPoints.push([a.lat, a.lng, 0.5]);
-        }
-
-        return `
-        <div class="alert">
-            <h4>${a.title}</h4>
-            <p>${a.location}</p>
-            <small>Threat: ${a.threatScore}</small>
-        </div>`;
-    }).join("");
-
-    heatLayer.setLatLngs(heatPoints);
-}
-
-// 🧠 RISK
-socket.on("risk", (data) => {
-    const el = document.getElementById('riskLevel');
-    el.textContent = "Risk Level: " + data.risk;
-
-    if (data.risk === "HIGH") {
-        el.style.color = "red";
-        showAlert("🚨 HIGH RISK DETECTED");
-    } else if (data.risk === "MEDIUM") {
-        el.style.color = "orange";
-    } else {
-        el.style.color = "green";
+    if (i.lat && i.lng) {
+        const marker = L.marker([i.lat, i.lng]);
+        marker.bindPopup(i.description);
+        clusterGroup.addLayer(marker);
     }
 });
 
-// 📰 REPORT
+// 🧠 ✅ INTELLIGENCE STREAM (MAIN FIX)
+socket.on("intel_update", (data) => {
+    console.log("📡 LIVE INTEL:", data);
+    updateDashboard(data.alerts);
+});
+
+// 🔥 UI UPDATE
+function updateDashboard(alerts) {
+    const container = document.getElementById("feed");
+
+    container.innerHTML = alerts.map(a => `
+        <li>
+            <strong>${a.title}</strong><br/>
+            📍 ${a.location}<br/>
+            ⚠️ Threat: ${a.threatScore}
+        </li>
+    `).join("");
+}
+
+// 📰 REPORTS
 socket.on("report", (r) => {
     const list = document.getElementById('reports');
-
     const li = document.createElement('li');
     li.textContent = `📅 ${r.date} | Total: ${r.total}`;
-
     list.prepend(li);
 });
 
+// START
 initMap();
 </script>
 
