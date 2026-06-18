@@ -1,4 +1,4 @@
-// news.js (UPGRADED INTELLIGENCE LAYER)
+// news.js (V4 - STABLE INTELLIGENCE ENGINE)
 
 const Parser = require('rss-parser');
 const axios = require('axios');
@@ -10,14 +10,13 @@ const { getCoordinates } = require('./geo');
 const { sendTelegramAlert } = require('./alerts');
 
 const parser = new Parser();
-
 const INCIDENT_FILE = 'incidents.json';
 
 // ======================================
-// 🧠 GLOBAL NEWS COOLDOWN (PREVENT 429)
+// 🧠 GLOBAL NEWS COOLDOWN
 // ======================================
 let lastFetchTime = 0;
-const NEWS_COOLDOWN = 60 * 1000; // 1 minute
+const NEWS_COOLDOWN = 60 * 1000;
 
 function canFetchNews() {
     const now = Date.now();
@@ -27,16 +26,48 @@ function canFetchNews() {
 }
 
 // ======================================
-// 🌐 RSS SOURCES (EXPANDED)
+// 🌐 CLEAN RSS SOURCES (STABLE ONLY)
 // ======================================
 const feeds = [
+    "https://feeds.bbci.co.uk/news/world/africa/rss.xml",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://feeds.bbci.co.uk/news/africa/rss.xml",
-    "https://news.google.com/rss/search?q=nigeria+kidnap+OR+attack+OR+security&hl=en&gl=US&ceid=US:en"
+    "https://news.google.com/rss/search?q=nigeria+security+OR+kidnap&hl=en&gl=NG&ceid=NG:en",
+    "https://punchng.com/feed/",
+    "https://www.vanguardngr.com/feed/"
 ];
 
 // ======================================
-// 🧠 DUPLICATE FILTER (STRONGER)
+// 🛡 SAFE TEXT BUILDER (FIX CRASH)
+// ======================================
+function safeText(item) {
+    return [
+        item.title || "",
+        item.contentSnippet || "",
+        item.content || ""
+    ].join(" ");
+}
+
+// ======================================
+// 🇳🇬 NIGERIA FILTER (HARD FILTER)
+// ======================================
+function isNigeriaRelated(text) {
+    const t = text.toLowerCase();
+
+    return (
+        t.includes("nigeria") ||
+        t.includes("abuja") ||
+        t.includes("lagos") ||
+        t.includes("kaduna") ||
+        t.includes("kano") ||
+        t.includes("borno") ||
+        t.includes("yobe") ||
+        t.includes("plateau") ||
+        t.includes("zamfara")
+    );
+}
+
+// ======================================
+// 🧠 DUPLICATE FILTER
 // ======================================
 function isDuplicate(incidents, title) {
     if (!Array.isArray(incidents)) return false;
@@ -56,23 +87,21 @@ function isDuplicate(incidents, title) {
 }
 
 // ======================================
-// 🧠 INCIDENT BUILDER (SAFE + FILTERED)
+// 🧠 INCIDENT BUILDER
 // ======================================
 async function buildIncident(rawText, title, source) {
 
     try {
         const analysis = analyzeText(rawText);
 
-        // 🚫 ignore weak signals
         if (!analysis || analysis.score < 2) return null;
 
         const locationName = extractLocation(rawText) || "Nigeria";
 
-        // 🌍 GEO FALLBACK (Nigeria center if fail)
         let coords = await getCoordinates(locationName);
 
         if (!coords || !coords.lat) {
-            coords = { lat: 9.0820, lng: 8.6753 }; // Nigeria fallback
+            coords = { lat: 9.0820, lng: 8.6753 };
         }
 
         return {
@@ -99,7 +128,7 @@ async function buildIncident(rawText, title, source) {
 }
 
 // ======================================
-// 📰 RSS ENGINE (SAFE MODE)
+// 📰 RSS ENGINE (FIXED)
 // ======================================
 async function fetchRSS(incidents) {
 
@@ -118,13 +147,21 @@ async function fetchRSS(incidents) {
 
                 if (isDuplicate(incidents, item.title)) continue;
 
-                const rawText =
-                    (item.title || "") + " " + (item.contentSnippet || "");
+                const rawText = safeText(item);
+
+                // 🇳🇬 HARD FILTER
+                if (!isNigeriaRelated(rawText)) continue;
+
+                const source =
+                    url.includes("bbc") ? "BBC" :
+                    url.includes("punch") ? "Punch" :
+                    url.includes("vanguard") ? "Vanguard" :
+                    "Google News";
 
                 const incident = await buildIncident(
                     rawText,
                     item.title,
-                    url.includes("bbc") ? "BBC" : "Google News"
+                    source
                 );
 
                 if (!incident) continue;
@@ -134,7 +171,6 @@ async function fetchRSS(incidents) {
 
                 console.log("[RSS]", incident.description);
 
-                // 🚨 ONLY ESCALATE HIGH RISK
                 if (incident.risk === "HIGH") {
                     await sendTelegramAlert({
                         message: "HIGH RISK NEWS DETECTED",
@@ -152,7 +188,7 @@ async function fetchRSS(incidents) {
 }
 
 // ======================================
-// 🌍 GDELT ENGINE (RATE LIMIT SAFE)
+// 🌍 GDELT ENGINE (FIXED)
 // ======================================
 async function fetchGDELT(incidents) {
 
@@ -163,22 +199,26 @@ async function fetchGDELT(incidents) {
             "https://api.gdeltproject.org/api/v2/doc/doc",
             {
                 params: {
-                    query: "kidnap OR attack OR gunmen OR abduction OR violence",
+                    query: "nigeria kidnap OR nigeria attack OR nigeria gunmen",
                     mode: "ArtList",
                     format: "json",
-                    maxrecords: 15
+                    maxrecords: 8
                 },
-                timeout: 8000
+                timeout: 15000
             }
         );
 
         const articles = res.data?.articles || [];
+
+        if (!articles.length) return 0;
 
         for (let article of articles) {
 
             if (!article?.title) continue;
 
             if (isDuplicate(incidents, article.title)) continue;
+
+            if (!isNigeriaRelated(article.title)) continue;
 
             const incident = await buildIncident(
                 article.title,
@@ -203,9 +243,8 @@ async function fetchGDELT(incidents) {
 
     } catch (err) {
 
-        // 🔥 IMPORTANT: prevents spam logs + respects 429
         if (err.response?.status === 429) {
-            console.log("[GDELT] RATE LIMITED - backing off");
+            console.log("[GDELT] RATE LIMITED");
         } else {
             console.log("[GDELT ERROR]", err.message);
         }
@@ -215,20 +254,17 @@ async function fetchGDELT(incidents) {
 }
 
 // ======================================
-// 🧠 MASTER FUNCTION (CONTROLLED EXECUTION)
+// 🧠 MASTER
 // ======================================
 async function fetchNews() {
 
     if (!canFetchNews()) {
-        console.log("[NEWS] cooldown active - skipping fetch");
+        console.log("[NEWS] cooldown active");
         return;
     }
 
     let incidents = load(INCIDENT_FILE);
-
-    if (!Array.isArray(incidents)) {
-        incidents = [];
-    }
+    if (!Array.isArray(incidents)) incidents = [];
 
     const rss = await fetchRSS(incidents);
     const gdelt = await fetchGDELT(incidents);
