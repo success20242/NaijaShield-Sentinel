@@ -1,36 +1,43 @@
-// geo.js
-
 const axios = require('axios');
-require('dotenv').config();
 
-const API_KEY = process.env.OPENCAGE_API_KEY;
+const GEO_API_KEY = process.env.GEO_API_KEY;
 
-async function getCoordinates(locationName) {
+// fallback Nigeria center
+const FALLBACK = { lat: 9.0820, lng: 8.6753 };
+
+async function getCoordinates(location) {
+
+    if (!location || location.length < 3) return FALLBACK;
 
     try {
         const res = await axios.get(
-            `https://api.opencagedata.com/geocode/v1/json`,
+            "https://api.opencagedata.com/geocode/v1/json",
             {
                 params: {
-                    key: API_KEY,
-                    q: locationName,
+                    q: location + ", Nigeria",
+                    key: GEO_API_KEY,
                     limit: 1
-                }
+                },
+                timeout: 5000
             }
         );
 
-        const data = res.data.results[0];
+        const result = res.data?.results?.[0];
 
-        if (!data) return null;
+        if (!result) return FALLBACK;
 
         return {
-            lat: data.geometry.lat,
-            lng: data.geometry.lng
+            lat: result.geometry.lat,
+            lng: result.geometry.lng
         };
 
     } catch (err) {
-        console.log("Geo Error:", err.message);
-        return null;
+
+        if (err.response?.status === 401) {
+            console.log("[GEO] Invalid API key");
+        }
+
+        return FALLBACK;
     }
 }
 
